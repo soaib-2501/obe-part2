@@ -15,6 +15,9 @@ export default function Navbar() {
         <Link to="/" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
         <Link to="/courses" className="text-sm text-slate-300 hover:text-white">Courses</Link>
         <Link to="/projects" className="text-sm text-slate-300 hover:text-white">Projects</Link>
+        {user.role === 'ADMIN' && (
+          <Link to="/users" className="text-sm text-slate-300 hover:text-white">Users</Link>
+        )}
       </div>
       <div className="flex items-center gap-4 text-sm">
         <span className="text-slate-300">{user.name} · {user.role}</span>

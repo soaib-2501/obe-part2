@@ -22,6 +22,12 @@ export default function CourseSubnav({ courseId }) {
         Students & Marks
       </NavLink>
       <NavLink
+        to={`/courses/${courseId}/report`}
+        className={({ isActive }) => `${link} ${isActive ? active : idle}`}
+      >
+        Assessment Report
+      </NavLink>
+      <NavLink
         to={`/courses/${courseId}/projects`}
         className={({ isActive }) => `${link} ${isActive ? active : idle}`}
       >

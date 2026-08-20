@@ -47,7 +47,9 @@ class CourseSerializer(serializers.ModelSerializer):
         ]
 
     def get_faculty_name(self, obj):
-        return obj.faculty.get_full_name() if obj.faculty else None
+        if not obj.faculty:
+            return None
+        return obj.faculty.get_full_name() or obj.faculty.username
 
     def create(self, validated_data):
         with transaction.atomic():

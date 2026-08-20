@@ -1,28 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 export default function Courses() {
+  const { isAdmin } = useAuth();
   const [courses, setCourses] = useState([]);
+  const [facultyList, setFacultyList] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    course_code: '', course_name: '', nba_code: '', semester: 'ODD', academic_year: '', credits: 3,
+    course_code: '', course_name: '', nba_code: '', semester: 'ODD', academic_year: '', credits: 3, faculty: '',
   });
   const [error, setError] = useState('');
 
   function load() {
     api.get('/courses/').then((res) => setCourses(res.data.results ?? res.data));
+    if (isAdmin) {
+      api.get('/auth/users/?role=FACULTY').then((res) => setFacultyList(res.data.results ?? res.data));
+    }
   }
 
-  useEffect(load, []);
+  useEffect(load, [isAdmin]);
 
   async function handleCreate(e) {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/courses/', { ...form, outcomes: [] });
+      const payload = { ...form, outcomes: [], faculty: form.faculty ? Number(form.faculty) : null };
+      await api.post('/courses/', payload);
       setShowForm(false);
-      setForm({ course_code: '', course_name: '', nba_code: '', semester: 'ODD', academic_year: '', credits: 3 });
+      setForm({ course_code: '', course_name: '', nba_code: '', semester: 'ODD', academic_year: '', credits: 3, faculty: '' });
       load();
     } catch (err) {
       setError(JSON.stringify(err.response?.data || 'Failed to create course'));
@@ -59,6 +66,17 @@ export default function Courses() {
             value={form.academic_year} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} required />
           <input type="number" placeholder="Credits" className="border rounded px-3 py-2 text-sm"
             value={form.credits} onChange={(e) => setForm({ ...form, credits: Number(e.target.value) })} />
+          {isAdmin && (
+            <select className="border rounded px-3 py-2 text-sm" value={form.faculty}
+              onChange={(e) => setForm({ ...form, faculty: e.target.value })}>
+              <option value="">Assign faculty later</option>
+              {facultyList.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.first_name} {f.last_name} (@{f.username})
+                </option>
+              ))}
+            </select>
+          )}
           <button type="submit" className="col-span-2 bg-slate-900 text-white py-2 rounded text-sm font-semibold">
             Create Course
           </button>
@@ -71,7 +89,10 @@ export default function Courses() {
           <Link key={c.id} to={`/courses/${c.id}`} className="flex items-center justify-between p-4 hover:bg-slate-50">
             <div>
               <p className="font-semibold text-slate-900">{c.course_code} — {c.course_name}</p>
-              <p className="text-xs text-slate-500">{c.semester} · {c.academic_year} · {c.credits} credits</p>
+              <p className="text-xs text-slate-500">
+                {c.semester} · {c.academic_year} · {c.credits} credits
+                {c.faculty_name ? ` · ${c.faculty_name}` : ' · Unassigned'}
+              </p>
             </div>
             <span className="text-xs text-slate-400">{c.outcomes?.length ?? 0} COs →</span>
           </Link>

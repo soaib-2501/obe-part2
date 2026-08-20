@@ -23,3 +23,19 @@ class Attainment(models.Model):
 
     def __str__(self):
         return f'{self.course_outcome.co_code} = {self.final_attainment}'
+
+
+class ProgramAttainment(models.Model):
+    """PO/PSO attainment for a course, derived from CO attainment × mapping strength."""
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='program_attainments')
+    po_key = models.CharField(max_length=5)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    attainment_level = models.PositiveSmallIntegerField(null=True, blank=True)
+    calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('course', 'po_key')
+        ordering = ['po_key']
+
+    def __str__(self):
+        return f'{self.course.course_code} {self.po_key} = {self.percentage}'

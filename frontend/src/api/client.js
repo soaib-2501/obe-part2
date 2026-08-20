@@ -6,6 +6,9 @@ const api = axios.create({ baseURL: BASE_URL });
 
 // Attach the access token to every request
 api.interceptors.request.use((config) => {
+  const url = config.url || '';
+  const isPublicAuth = url.includes('/auth/login/') || url.includes('/auth/signup/') || url.includes('/auth/refresh/');
+  if (isPublicAuth) return config;
   const token = localStorage.getItem('access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

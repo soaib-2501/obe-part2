@@ -1,5 +1,11 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
+
+
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('role', User.Role.ADMIN)
+        return super().create_superuser(username, email, password, **extra_fields)
 
 
 class User(AbstractUser):
@@ -14,6 +20,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.FACULTY)
     email = models.EmailField(unique=True)
 
+    objects = UserManager()
+
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = ['email']
 
@@ -22,8 +30,8 @@ class User(AbstractUser):
 
     @property
     def is_admin_role(self):
-        return self.role == self.Role.ADMIN
+        return self.role == self.Role.ADMIN or self.is_superuser
 
     @property
     def is_faculty_role(self):
-        return self.role == self.Role.FACULTY
+        return self.role == self.Role.FACULTY and not self.is_superuser

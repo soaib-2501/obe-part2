@@ -130,6 +130,7 @@ export default function Dashboard() {
                       {c.course_code}
                     </Link>
                     <p className="text-xs text-slate-500">{c.course_name}</p>
+                    {c.faculty_name && <p className="text-xs text-slate-400">{c.faculty_name}</p>}
                   </td>
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.academic_year}</td>
                   <td className="px-4 py-3 text-center">{c.outcome_count}</td>

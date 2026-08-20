@@ -4,11 +4,12 @@ Kept as a plain function — not a view — so it can be unit-tested and reused
 (e.g. from a management command or a Celery task later) without touching HTTP.
 """
 from decimal import Decimal
-from courses.models import CourseOutcome
-from assessments.models import StudentMark, Assessment
-from .models import Attainment
+from courses.models import CourseOutcome, CoPoMapping
+from assessments.models import StudentMark
+from .models import Attainment, ProgramAttainment
 
 TEST_TYPES = ['T1', 'T2', 'T3']
+PO_KEYS = ['PO1', 'PO2', 'PO3', 'PSO1', 'PSO2']
 
 
 def level_from_percentage(pct):
@@ -71,4 +72,44 @@ def calculate_for_course_outcome(course_outcome: CourseOutcome) -> Attainment:
 
 def calculate_for_course(course_id):
     outcomes = CourseOutcome.objects.filter(course_id=course_id)
-    return [calculate_for_course_outcome(co) for co in outcomes]
+    co_results = [calculate_for_course_outcome(co) for co in outcomes]
+    po_results = calculate_program_attainments(course_id)
+    return co_results, po_results
+
+
+def calculate_program_attainments(course_id):
+    """
+    Weighted average: for each PO/PSO, Σ(CO_final × mapping_level) / Σ(mapping_level).
+    Mapping 0 or blank is ignored.
+    """
+    results = []
+    for po_key in PO_KEYS:
+        mappings = CoPoMapping.objects.filter(
+            course_outcome__course_id=course_id,
+            po_key=po_key,
+            level__isnull=False,
+            level__gt=0,
+        ).select_related('course_outcome')
+        weighted = Decimal('0')
+        weight = Decimal('0')
+        for mapping in mappings:
+            try:
+                att = mapping.course_outcome.attainment
+            except Attainment.DoesNotExist:
+                continue
+            if att.final_attainment is None:
+                continue
+            level = Decimal(mapping.level)
+            weighted += att.final_attainment * level
+            weight += level
+        percentage = (weighted / weight) if weight else None
+        obj, _ = ProgramAttainment.objects.update_or_create(
+            course_id=course_id,
+            po_key=po_key,
+            defaults={
+                'percentage': percentage,
+                'attainment_level': level_from_percentage(percentage),
+            },
+        )
+        results.append(obj)
+    return results

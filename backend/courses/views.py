@@ -25,6 +25,12 @@ class CourseViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def perform_update(self, serializer):
+        if self.request.user.is_faculty_role:
+            serializer.save(faculty=self.request.user)
+        else:
+            serializer.save()
+
 
 class CourseOutcomeViewSet(viewsets.ModelViewSet):
     queryset = CourseOutcome.objects.all()

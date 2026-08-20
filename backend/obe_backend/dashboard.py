@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from attainments.models import Attainment
+from attainments.models import Attainment, ProgramAttainment
 from courses.models import Course
 from projects.models import Project
 
@@ -12,7 +12,7 @@ class DashboardSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        courses = Course.objects.all()
+        courses = Course.objects.select_related('faculty').all()
         if request.user.is_faculty_role:
             courses = courses.filter(faculty=request.user)
 
@@ -43,6 +43,7 @@ class DashboardSummaryView(APIView):
 
         attainments = Attainment.objects.filter(course_id__in=course_ids)
         overall_avg = attainments.aggregate(avg=Avg('final_attainment'))['avg']
+        po_avg = ProgramAttainment.objects.filter(course_id__in=course_ids).aggregate(avg=Avg('percentage'))['avg']
 
         level_distribution = {str(i): 0 for i in range(4)}
         for row in attainments.exclude(attainment_level__isnull=True).values('attainment_level').annotate(n=Count('id')):
@@ -58,6 +59,7 @@ class DashboardSummaryView(APIView):
             'outcome_count': sum(c.outcome_count for c in course_rows),
             'pending_attainment': pending,
             'average_final_attainment': round(float(overall_avg), 2) if overall_avg is not None else None,
+            'average_po_attainment': round(float(po_avg), 2) if po_avg is not None else None,
             'level_distribution': level_distribution,
             'projects': {
                 'total': projects.count(),
@@ -77,6 +79,7 @@ class DashboardSummaryView(APIView):
                     'attainment_count': c.attainment_count,
                     'avg_final': round(float(c.avg_final), 2) if c.avg_final is not None else None,
                     'avg_level': round(float(c.avg_level), 2) if c.avg_level is not None else None,
+                    'faculty_name': (c.faculty.get_full_name() or c.faculty.username) if c.faculty else None,
                     'project_total': c.project_total,
                     'projects_active': c.projects_active,
                     'pending': c.outcome_count > 0 and c.attainment_count < c.outcome_count,

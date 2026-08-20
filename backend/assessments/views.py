@@ -1,5 +1,7 @@
 from django.db import transaction
+from django.db.models import Avg
 from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Assessment, Student, StudentMark
 from .serializers import AssessmentSerializer, StudentSerializer, StudentMarkSerializer
@@ -15,6 +17,37 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         course_id = self.request.query_params.get('course')
         return qs.filter(course_id=course_id) if course_id else qs
+
+    @action(detail=False, methods=['get'])
+    def report(self, request):
+        course_id = request.query_params.get('course')
+        if not course_id:
+            return Response({'error': 'course is required'}, status=400)
+        assessments = Assessment.objects.filter(course_id=course_id)
+        rows = []
+        for assessment in assessments:
+            marks = StudentMark.objects.filter(assessment=assessment)
+            overall = marks.aggregate(avg=Avg('marks_obtained'))['avg']
+            by_co = []
+            for item in marks.values('course_outcome', 'course_outcome__co_code').annotate(avg=Avg('marks_obtained')):
+                by_co.append({
+                    'course_outcome': item['course_outcome'],
+                    'co_code': item['course_outcome__co_code'],
+                    'average': round(float(item['avg']), 2) if item['avg'] is not None else None,
+                })
+            rows.append({
+                'id': assessment.id,
+                'assessment_type': assessment.assessment_type,
+                'max_marks': assessment.max_marks,
+                'class_average': round(float(overall), 2) if overall is not None else None,
+                'entry_count': marks.count(),
+                'by_co': by_co,
+            })
+        return Response({
+            'course': int(course_id),
+            'student_count': Student.objects.filter(course_id=course_id).count(),
+            'assessments': rows,
+        })
 
 
 class StudentViewSet(viewsets.ModelViewSet):

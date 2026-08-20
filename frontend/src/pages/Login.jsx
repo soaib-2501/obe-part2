@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -18,7 +18,7 @@ export default function Login() {
       await login(username, password);
       navigate('/');
     } catch (err) {
-      setError('Invalid username or password.');
+      setError('Invalid username/email or password.');
     } finally {
       setLoading(false);
     }
@@ -28,15 +28,16 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
       <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-lg p-8 w-full max-w-sm">
         <h1 className="text-2xl font-bold text-slate-900 mb-1">OBE Management System</h1>
-        <p className="text-sm text-slate-500 mb-6">Sign in with your faculty or admin account</p>
+        <p className="text-sm text-slate-500 mb-6">Sign in as Administrator or Faculty</p>
 
         {error && <div className="bg-red-50 text-red-700 text-sm rounded p-2 mb-4">{error}</div>}
 
-        <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Username or email</label>
         <input
           className="w-full border rounded px-3 py-2 mb-4 text-sm"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
           required
         />
 
@@ -46,6 +47,7 @@ export default function Login() {
           className="w-full border rounded px-3 py-2 mb-6 text-sm"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
           required
         />
 
@@ -56,6 +58,11 @@ export default function Login() {
         >
           {loading ? 'Signing in…' : 'Sign In'}
         </button>
+
+        <p className="text-sm text-slate-500 mt-4 text-center">
+          New here?{' '}
+          <Link to="/signup" className="text-slate-900 font-semibold hover:underline">Create an account</Link>
+        </p>
       </form>
     </div>
   );

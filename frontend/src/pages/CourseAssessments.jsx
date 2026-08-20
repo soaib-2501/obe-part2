@@ -112,6 +112,50 @@ export default function CourseAssessments() {
     setGrid((prev) => ({ ...prev, [cellKey(studentId, coId)]: value }));
   }
 
+  async function importStudentsCsv(file) {
+    const text = await file.text();
+    setBulkText(text);
+    setShowBulk(true);
+  }
+
+  async function importMarksCsv(file) {
+    if (!selected) {
+      setError('Select an assessment before importing marks.');
+      return;
+    }
+    setError('');
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const next = { ...grid };
+    let applied = 0;
+    for (const line of lines) {
+      if (/^roll/i.test(line)) continue;
+      const parts = line.split(/[,\t]/).map((part) => part.trim());
+      const [roll, coCode, mark] = parts;
+      const student = students.find((s) => s.roll_number.toLowerCase() === String(roll).toLowerCase());
+      const co = outcomes.find((o) => o.co_code.toLowerCase() === String(coCode).toLowerCase());
+      if (!student || !co || mark === undefined) continue;
+      next[cellKey(student.id, co.id)] = mark;
+      applied += 1;
+    }
+    setGrid(next);
+    setStatus(`Loaded ${applied} mark cells from CSV. Click Save marks to store them.`);
+  }
+
+  function applyAttendancePercent(studentId, percent) {
+    if (!selected) return;
+    const pct = Number(percent);
+    if (Number.isNaN(pct)) return;
+    const marksValue = ((pct / 100) * selected.max_marks).toFixed(2);
+    setGrid((prev) => {
+      const next = { ...prev };
+      outcomes.forEach((co) => {
+        next[cellKey(studentId, co.id)] = marksValue;
+      });
+      return next;
+    });
+  }
+
   async function addStudent(e) {
     e.preventDefault();
     setError('');
@@ -130,6 +174,7 @@ export default function CourseAssessments() {
     const lines = bulkText.split('\n').map((line) => line.trim()).filter(Boolean);
     const payload = [];
     for (const line of lines) {
+      if (/^roll/i.test(line)) continue;
       const [roll_number, ...rest] = line.split(/[,\t]/).map((part) => part.trim());
       const name = rest.join(' ').trim();
       if (!roll_number || !name) {
@@ -300,6 +345,11 @@ export default function CourseAssessments() {
               <button type="submit" className="mt-2 bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs font-semibold">
                 Import students
               </button>
+              <label className="ml-3 text-xs text-slate-600 cursor-pointer hover:underline">
+                Or upload CSV
+                <input type="file" accept=".csv,text/csv" className="hidden"
+                  onChange={(e) => { if (e.target.files[0]) importStudentsCsv(e.target.files[0]); e.target.value = ''; }} />
+              </label>
             </form>
           )}
 
@@ -385,9 +435,15 @@ export default function CourseAssessments() {
               {selected
                 ? `${typeLabel(selected.assessment_type)} — enter marks out of ${selected.max_marks} for each CO. Empty cells are not saved.`
                 : 'Create an assessment to enter marks.'}
+              {selected?.assessment_type === 'ATTENDANCE' && ' Enter class attendance % in the extra column to fill all CO cells.'}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <label className="text-xs font-semibold text-slate-600 cursor-pointer hover:underline">
+              Import marks CSV
+              <input type="file" accept=".csv,text/csv" className="hidden"
+                onChange={(e) => { if (e.target.files[0]) importMarksCsv(e.target.files[0]); e.target.value = ''; }} />
+            </label>
             <button
               type="button"
               disabled={!selected || saving || !students.length || !outcomes.length}
@@ -424,6 +480,7 @@ export default function CourseAssessments() {
                   {outcomes.map((co) => (
                     <th key={co.id} className="text-center px-1">{co.co_code}</th>
                   ))}
+                  {selected.assessment_type === 'ATTENDANCE' && <th className="text-center px-1">Attend %</th>}
                 </tr>
               </thead>
               <tbody>
@@ -444,6 +501,19 @@ export default function CourseAssessments() {
                         />
                       </td>
                     ))}
+                    {selected.assessment_type === 'ATTENDANCE' && (
+                      <td className="text-center px-1 py-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="%"
+                          className="border rounded w-16 text-center text-xs py-1"
+                          onChange={(e) => applyAttendancePercent(s.id, e.target.value)}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
