@@ -1,0 +1,8 @@
+# Root-level safety net — backend/ and frontend/ already have their own .gitignore
+backend/venv/
+backend/__pycache__/
+backend/.env
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+.DS_Store
