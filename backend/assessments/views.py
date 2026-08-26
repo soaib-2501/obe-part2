@@ -7,6 +7,12 @@ from .models import Assessment, Student, StudentMark
 from .serializers import AssessmentSerializer, StudentSerializer, StudentMarkSerializer
 
 
+def faculty_scope(user, qs, lookup='course__faculty'):
+    if user.is_faculty_role:
+        return qs.filter(**{lookup: user})
+    return qs
+
+
 class AssessmentViewSet(viewsets.ModelViewSet):
     queryset = Assessment.objects.all()
     serializer_class = AssessmentSerializer
@@ -14,7 +20,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = faculty_scope(self.request.user, super().get_queryset())
         course_id = self.request.query_params.get('course')
         return qs.filter(course_id=course_id) if course_id else qs
 
@@ -23,7 +29,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         course_id = request.query_params.get('course')
         if not course_id:
             return Response({'error': 'course is required'}, status=400)
-        assessments = Assessment.objects.filter(course_id=course_id)
+        assessments = faculty_scope(request.user, Assessment.objects.filter(course_id=course_id))
         rows = []
         for assessment in assessments:
             marks = StudentMark.objects.filter(assessment=assessment)
@@ -57,7 +63,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = faculty_scope(self.request.user, super().get_queryset())
         course_id = self.request.query_params.get('course')
         return qs.filter(course_id=course_id).order_by('roll_number') if course_id else qs.order_by('roll_number')
 
@@ -70,7 +76,7 @@ class StudentMarkViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = faculty_scope(self.request.user, super().get_queryset(), 'assessment__course__faculty')
         assessment_id = self.request.query_params.get('assessment')
         return qs.filter(assessment_id=assessment_id) if assessment_id else qs
 

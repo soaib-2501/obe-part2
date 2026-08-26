@@ -7,13 +7,25 @@ export default function CourseSubnav({ courseId }) {
   const idle = 'text-slate-600 hover:bg-slate-100';
 
   return (
-    <div className="flex gap-2 mb-6">
+    <div className="flex flex-wrap gap-2 mb-6 no-print">
+      <NavLink
+        to={`/courses/${courseId}/description`}
+        className={({ isActive }) => `${link} ${isActive ? active : idle}`}
+      >
+        Course Description
+      </NavLink>
+      <NavLink
+        to={`/courses/${courseId}/opening-report`}
+        className={({ isActive }) => `${link} ${isActive ? active : idle}`}
+      >
+        Opening Report
+      </NavLink>
       <NavLink
         to={`/courses/${courseId}`}
         end
         className={({ isActive }) => `${link} ${isActive ? active : idle}`}
       >
-        Outcomes & Mapping
+        Attainment
       </NavLink>
       <NavLink
         to={`/courses/${courseId}/assessments`}

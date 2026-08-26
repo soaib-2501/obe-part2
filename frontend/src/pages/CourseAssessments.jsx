@@ -44,6 +44,10 @@ export default function CourseAssessments() {
   const [saving, setSaving] = useState(false);
 
   const [studentForm, setStudentForm] = useState({ roll_number: '', name: '' });
+  const [editingStudentId, setEditingStudentId] = useState(null);
+  const [studentEdit, setStudentEdit] = useState({ roll_number: '', name: '' });
+  const [editingAssessmentId, setEditingAssessmentId] = useState(null);
+  const [assessmentMax, setAssessmentMax] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [showBulk, setShowBulk] = useState(false);
 
@@ -199,8 +203,40 @@ export default function CourseAssessments() {
     if (!window.confirm('Remove this student and their marks from the course?')) return;
     setError('');
     await api.delete(`/assessments/students/${studentId}/`);
+    if (editingStudentId === studentId) setEditingStudentId(null);
     await loadCourseAndLists();
     await loadMarks(selectedId);
+  }
+
+  async function saveStudentEdit(studentId) {
+    setError('');
+    try {
+      await api.patch(`/assessments/students/${studentId}/`, {
+        roll_number: studentEdit.roll_number,
+        name: studentEdit.name,
+        course: Number(id),
+      });
+      setEditingStudentId(null);
+      await loadCourseAndLists();
+    } catch (err) {
+      setError(formatError(err, 'Could not update student.'));
+    }
+  }
+
+  async function saveAssessmentMax(assessmentId) {
+    setError('');
+    const maxMarks = Number(assessmentMax);
+    if (!maxMarks || maxMarks < 1) {
+      setError('Max marks must be at least 1.');
+      return;
+    }
+    try {
+      await api.patch(`/assessments/${assessmentId}/`, { max_marks: maxMarks });
+      setEditingAssessmentId(null);
+      await loadCourseAndLists();
+    } catch (err) {
+      setError(formatError(err, 'Could not update assessment.'));
+    }
   }
 
   async function addAssessment(e) {
@@ -356,14 +392,29 @@ export default function CourseAssessments() {
           <div className="border rounded divide-y max-h-56 overflow-auto">
             {students.length === 0 && <p className="p-3 text-sm text-slate-400">No students yet.</p>}
             {students.map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                <div>
-                  <span className="font-medium text-slate-900">{s.roll_number}</span>
-                  <span className="text-slate-500"> · {s.name}</span>
-                </div>
-                <button type="button" onClick={() => deleteStudent(s.id)} className="text-xs text-red-600 hover:underline">
-                  Remove
-                </button>
+              <div key={s.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                {editingStudentId === s.id ? (
+                  <>
+                    <input className="border rounded px-2 py-1 text-sm w-32" value={studentEdit.roll_number}
+                      onChange={(e) => setStudentEdit({ ...studentEdit, roll_number: e.target.value })} />
+                    <input className="border rounded px-2 py-1 text-sm flex-1" value={studentEdit.name}
+                      onChange={(e) => setStudentEdit({ ...studentEdit, name: e.target.value })} />
+                    <button type="button" onClick={() => saveStudentEdit(s.id)} className="text-xs font-semibold text-slate-900">Save</button>
+                    <button type="button" onClick={() => setEditingStudentId(null)} className="text-xs text-slate-500">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium text-slate-900">{s.roll_number}</span>
+                      <span className="text-slate-500"> · {s.name}</span>
+                    </div>
+                    <button type="button" onClick={() => { setEditingStudentId(s.id); setStudentEdit({ roll_number: s.roll_number, name: s.name }); }}
+                      className="text-xs text-slate-600 hover:underline">Edit</button>
+                    <button type="button" onClick={() => deleteStudent(s.id)} className="text-xs text-red-600 hover:underline">
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -408,19 +459,42 @@ export default function CourseAssessments() {
             {assessments.map((a) => (
               <div
                 key={a.id}
-                className={`flex items-center justify-between rounded px-3 py-2 text-sm cursor-pointer ${
+                className={`flex items-center justify-between gap-2 rounded px-3 py-2 text-sm ${
                   a.id === selectedId ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'
                 }`}
-                onClick={() => setSelectedId(a.id)}
               >
-                <span>{typeLabel(a.assessment_type)} · max {a.max_marks}</span>
-                <button
-                  type="button"
-                  className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-red-600'} hover:underline`}
-                  onClick={(e) => { e.stopPropagation(); deleteAssessment(a.id); }}
-                >
-                  Delete
-                </button>
+                {editingAssessmentId === a.id ? (
+                  <>
+                    <span className="flex-1">{typeLabel(a.assessment_type)}</span>
+                    <input type="number" min="1" className="border rounded px-2 py-0.5 w-20 text-slate-900 text-xs"
+                      value={assessmentMax} onChange={(e) => setAssessmentMax(e.target.value)}
+                      onClick={(e) => e.stopPropagation()} />
+                    <button type="button" className={`text-xs ${a.id === selectedId ? 'text-white' : 'text-slate-900'}`}
+                      onClick={(e) => { e.stopPropagation(); saveAssessmentMax(a.id); }}>Save</button>
+                    <button type="button" className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-slate-500'}`}
+                      onClick={(e) => { e.stopPropagation(); setEditingAssessmentId(null); }}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="flex-1 text-left" onClick={() => setSelectedId(a.id)}>
+                      {typeLabel(a.assessment_type)} · max {a.max_marks}
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-slate-600'} hover:underline`}
+                      onClick={(e) => { e.stopPropagation(); setEditingAssessmentId(a.id); setAssessmentMax(String(a.max_marks)); }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-red-600'} hover:underline`}
+                      onClick={(e) => { e.stopPropagation(); deleteAssessment(a.id); }}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

@@ -7,6 +7,8 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Courses from './pages/Courses';
 import CourseDetail from './pages/CourseDetail';
+import CourseDescription from './pages/CourseDescription';
+import CourseOpeningReport from './pages/CourseOpeningReport';
 import CourseAssessments from './pages/CourseAssessments';
 import Projects from './pages/Projects';
 import Users from './pages/Users';
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
         <Route path="/courses" element={<ProtectedRoute><Courses /></ProtectedRoute>} />
         <Route path="/courses/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+        <Route path="/courses/:id/description" element={<ProtectedRoute><CourseDescription /></ProtectedRoute>} />
+        <Route path="/courses/:id/opening-report" element={<ProtectedRoute><CourseOpeningReport /></ProtectedRoute>} />
         <Route path="/courses/:id/assessments" element={<ProtectedRoute><CourseAssessments /></ProtectedRoute>} />
         <Route path="/courses/:id/report" element={<ProtectedRoute><AssessmentReport /></ProtectedRoute>} />
         <Route path="/courses/:id/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />

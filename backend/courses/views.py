@@ -3,27 +3,37 @@ from .models import Course, CourseOutcome, CoPoMapping
 from .serializers import CourseSerializer, CourseOutcomeSerializer, CoPoMappingSerializer
 
 
+def faculty_course_qs(user, qs):
+    if user.is_faculty_role:
+        return qs.filter(faculty=user)
+    return qs
+
+
 class CourseViewSet(viewsets.ModelViewSet):
     """
-    Full CRUD on courses. Faculty see their own courses; Admins see everything
-    (SRS 2.3: Faculty "manage course-related information", Admin has full access).
+    Faculty see only their own course offerings (per session).
+    Admins see everything and can assign faculty.
     """
     serializer_class = CourseSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
-        user = self.request.user
-        qs = Course.objects.all()
-        if user.is_faculty_role:
-            qs = qs.filter(faculty=user)
+        qs = Course.objects.prefetch_related('outcomes__mappings', 'modules', 'books').select_related('faculty')
+        qs = faculty_course_qs(self.request.user, qs)
+        year = self.request.query_params.get('academic_year') or self.request.query_params.get('session')
+        if year:
+            qs = qs.filter(academic_year=year)
         return qs
 
     def perform_create(self, serializer):
-        if self.request.user.is_faculty_role:
-            serializer.save(faculty=self.request.user)
-        else:
-            serializer.save()
+        user = self.request.user
+        extra = {}
+        if user.is_faculty_role:
+            extra['faculty'] = user
+            if not serializer.validated_data.get('coordinator_names'):
+                extra['coordinator_names'] = user.get_full_name() or user.username
+        serializer.save(**extra)
 
     def perform_update(self, serializer):
         if self.request.user.is_faculty_role:
@@ -33,12 +43,14 @@ class CourseViewSet(viewsets.ModelViewSet):
 
 
 class CourseOutcomeViewSet(viewsets.ModelViewSet):
-    queryset = CourseOutcome.objects.all()
     serializer_class = CourseOutcomeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = CourseOutcome.objects.select_related('course').prefetch_related('mappings')
+        if self.request.user.is_faculty_role:
+            qs = qs.filter(course__faculty=self.request.user)
         course_id = self.request.query_params.get('course')
         if course_id:
             qs = qs.filter(course_id=course_id)
@@ -46,6 +58,12 @@ class CourseOutcomeViewSet(viewsets.ModelViewSet):
 
 
 class CoPoMappingViewSet(viewsets.ModelViewSet):
-    queryset = CoPoMapping.objects.all()
     serializer_class = CoPoMappingSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = CoPoMapping.objects.select_related('course_outcome__course')
+        if self.request.user.is_faculty_role:
+            qs = qs.filter(course_outcome__course__faculty=self.request.user)
+        return qs

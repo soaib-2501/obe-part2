@@ -16,6 +16,7 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
 
   function load() {
@@ -24,18 +25,44 @@ export default function Users() {
 
   useEffect(load, []);
 
-  async function handleCreate(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/auth/users/', form);
+      if (editingId) {
+        const payload = { ...form };
+        if (!payload.password) delete payload.password;
+        await api.patch(`/auth/users/${editingId}/`, payload);
+      } else {
+        await api.post('/auth/users/', form);
+      }
       setForm(emptyForm);
       setShowForm(false);
+      setEditingId(null);
       load();
     } catch (err) {
       const data = err.response?.data;
-      setError(typeof data === 'string' ? data : JSON.stringify(data || 'Could not create user.'));
+      setError(typeof data === 'string' ? data : JSON.stringify(data || 'Could not save user.'));
     }
+  }
+
+  function startEdit(u) {
+    setEditingId(u.id);
+    setShowForm(true);
+    setForm({
+      username: u.username,
+      email: u.email,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      password: '',
+      role: u.role,
+    });
+  }
+
+  function resetForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
   }
 
   async function patchUser(id, payload) {
@@ -70,7 +97,7 @@ export default function Users() {
         </div>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}
           className="bg-slate-900 text-white px-4 py-2 rounded text-sm font-semibold"
         >
           {showForm ? 'Cancel' : '+ Add user'}
@@ -80,7 +107,8 @@ export default function Users() {
       {error && <div className="bg-red-50 text-red-700 text-sm rounded p-3 mb-4">{error}</div>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white shadow rounded-lg p-6 mb-6 grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 mb-6 grid grid-cols-2 gap-4">
+          <p className="col-span-2 text-sm font-semibold text-slate-700">{editingId ? 'Edit user' : 'New user'}</p>
           <input placeholder="First name" className="border rounded px-3 py-2 text-sm" value={form.first_name}
             onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
           <input placeholder="Last name" className="border rounded px-3 py-2 text-sm" value={form.last_name}
@@ -89,15 +117,17 @@ export default function Users() {
             onChange={(e) => setForm({ ...form, username: e.target.value })} required />
           <input type="email" placeholder="Email" className="border rounded px-3 py-2 text-sm" value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-          <input type="password" placeholder="Password" className="border rounded px-3 py-2 text-sm" value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} required />
+          <input type="password" placeholder={editingId ? 'New password (leave blank to keep)' : 'Password'}
+            className="border rounded px-3 py-2 text-sm" value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={editingId ? undefined : 8}
+            required={!editingId} />
           <select className="border rounded px-3 py-2 text-sm" value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            onChange={(e) => setForm({ ...form, role: e.target.value })} disabled={editingId === current?.id}>
             <option value="FACULTY">Faculty</option>
             <option value="ADMIN">Administrator</option>
           </select>
           <button type="submit" className="col-span-2 bg-slate-900 text-white py-2 rounded text-sm font-semibold">
-            Create user
+            {editingId ? 'Update user' : 'Create user'}
           </button>
         </form>
       )}
@@ -130,9 +160,14 @@ export default function Users() {
                 {u.is_active ? 'Deactivate' : 'Activate'}
               </button>
               {u.id !== current?.id && (
-                <button type="button" onClick={() => deleteUser(u.id)} className="text-xs text-red-600 hover:underline">
-                  Delete
-                </button>
+                <>
+                  <button type="button" onClick={() => startEdit(u)} className="text-xs text-slate-600 hover:underline">
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => deleteUser(u.id)} className="text-xs text-red-600 hover:underline">
+                    Delete
+                  </button>
+                </>
               )}
             </div>
           </div>

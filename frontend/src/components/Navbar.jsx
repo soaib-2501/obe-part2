@@ -9,7 +9,7 @@ export default function Navbar() {
   if (!user) return null;
 
   return (
-    <nav className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between">
+    <nav className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between no-print">
       <div className="flex items-center gap-6">
         <span className="font-bold text-lg">OBE Management System</span>
         <Link to="/" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
