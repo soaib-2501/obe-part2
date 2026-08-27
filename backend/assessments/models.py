@@ -22,10 +22,13 @@ class Assessment(models.Model):
 
 
 class Student(models.Model):
-    """A minimal student record — enough to attach marks to (roll number is the natural key)."""
-    roll_number = models.CharField(max_length=30, unique=True)
+    """Student on one course offering. Same roll can exist on another offering/session."""
+    roll_number = models.CharField(max_length=30)
     name = models.CharField(max_length=255)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='students')
+
+    class Meta:
+        unique_together = ('course', 'roll_number')
 
     def __str__(self):
         return f'{self.roll_number} — {self.name}'

@@ -40,6 +40,9 @@ Preview and **Print / Save as PDF** use the same document layout as Course Descr
 
 Historical attainment is keyed by **`course_code + academic_year + semester + co_code`**, not the current Course PK, so last year’s offering still applies.
 
+### Assessment Tools
+Header fields come from Course Description (programme, year, Odd/Even, course, NBA code, coordinator). Faculty add tools (T-1, T-2, T-3 / mid-sem / end-sem) and questions. Selecting a CO fills the question’s Bloom level from that CO; faculty can override and add remarks. Saved on this offering only.
+
 ### Attainment
 Recalculate from student marks:
 
@@ -50,7 +53,7 @@ Recalculate from student marks:
 
 ### Also included
 - Students & marks entry per assessment type  
-- Assessment report (class averages by assessment and by CO)  
+- **Assessment Tools** document (question ↔ CO mapping, stored per offering)  
 - Projects  
 - Dashboard  
 - Admin user management  
@@ -69,6 +72,7 @@ obe-part2/
 │   ├── assessments/              # Assessment, Student, StudentMark
 │   ├── attainments/              # CO/PO calculation + HistoricalCoAttainment
 │   ├── opening_reports/          # OpeningReport (OneToOne Course)
+│   ├── assessment_tools/         # Assessment Tools document (OneToOne Course)
 │   └── projects/
 ├── frontend/
 │   └── src/
@@ -76,7 +80,7 @@ obe-part2/
 │       ├── context/AuthContext.jsx
 │       ├── components/           # Navbar, CourseSubnav, ProtectedRoute
 │       └── pages/                # Login, Courses, Course Description,
-│                                 # Opening Report, Assessments, Reports, …
+│                                 # Opening Report, Assessment Tools, Marks, …
 └── README.md
 ```
 
@@ -88,6 +92,7 @@ obe-part2/
 | Dashboard | `/dashboard/` |
 | Courses, COs, mappings | `/courses/` |
 | Opening report | `/opening-reports/<course_id>/` |
+| Assessment tools | `/assessment-tools/<course_id>/` |
 | Assessments, students, marks | `/assessments/` |
 | CO/PO attainment + calculate | `/attainments/` |
 | Historical CO attainment | `/attainments/historical/?course=&academic_year=` |
@@ -127,9 +132,9 @@ Sign in at `http://localhost:5173`. Faculty accounts are created by an Admin on 
 1. Create a course for this **session** (code + academic year + faculty).  
 2. **Course Description** — fill COs, mapping, syllabus; Save; Print if needed.  
 3. **Opening Report** — confirm synced CD data; set targets; Save; Print.  
-4. **Students & Marks** — enter assessments.  
-5. **Attainment** — recalculate; check PO/PSO.  
-6. **Assessment Report** — print class summary.
+4. **Assessment Tools** — add T-1 / T-2 / T-3 (or mid/end sem) and questions; Save; Print.  
+5. **Students & Marks** — enter assessments.  
+6. **Attainment** — recalculate; check PO/PSO.
 
 Print / Save as PDF uses the browser print dialog (A4). Choose “Save as PDF” as the destination.
 

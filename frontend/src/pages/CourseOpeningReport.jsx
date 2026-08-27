@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
+import A4Document from '../components/A4Document';
 
 const LEVEL_LABELS = {
   REMEMBER: 'Remember Level (Level 1)',
@@ -507,14 +508,13 @@ export default function CourseOpeningReport() {
         </section>
       </div>
 
-      <section className="cd-preview bg-white shadow rounded-lg p-8 relative text-[11px] leading-relaxed text-black">
-        <div className="relative">
-          <div className="border-b border-slate-800 pb-3 mb-4 text-center">
-            <p className="text-xl font-bold text-slate-900 uppercase tracking-wide">Course Opening Report</p>
-            <p className="font-bold text-slate-900 uppercase text-[11px] mt-1 break-words">{course.institute || 'Institute'}</p>
-          </div>
+      <A4Document watermark={report.watermark_text} revision={`${JSON.stringify(report)}-${JSON.stringify(course)}`}>
+        <div className="border-b border-slate-800 pb-3 mb-4 text-center">
+          <p className="text-xl font-bold text-slate-900 uppercase tracking-wide">Course Opening Report</p>
+          <p className="font-bold text-slate-900 uppercase text-[11px] mt-1 break-words">{course.institute || 'Institute'}</p>
+        </div>
 
-          <table className="w-full border-collapse mb-4">
+        <table className="w-full border-collapse mb-4">
             <tbody>
               <tr>
                 <td className={`${td} font-semibold w-[18%]`}>Subject Code</td>
@@ -705,17 +705,9 @@ export default function CourseOpeningReport() {
           <h3 className="font-semibold underline mb-1">8. Innovative Evaluation Strategy to be used</h3>
           <BulletList items={report.eval_strategies} other={report.eval_other} />
 
-          <div className="mt-8 flex justify-between text-[11px]">
-            <div><b>Signature:</b><br /><br />Module Coordinator:</div>
-            <div><b>Signature:</b><br /><br />Course Coordinator: {coordinator}</div>
-          </div>
+          <h3 className="font-semibold underline mb-1 mt-6">Appendix</h3>
 
-          <div className="border-b border-slate-800 pb-3 mt-8 mb-4 text-center">
-            <p className="text-xl font-bold text-slate-900 uppercase tracking-wide">Course Opening Report</p>
-            <p className="font-bold text-slate-900 uppercase text-[11px] mt-1">Appendix</p>
-          </div>
-
-          <h3 className="font-semibold underline mb-1">Guidelines to identify Weak Learners and Bright Students</h3>
+          <h3 className="font-semibold underline mb-1 mt-4">Guidelines to identify Weak Learners and Bright Students</h3>
           <ul className="list-disc ml-5 mb-4">
             {(report.guidelines || []).map((g, idx) => <li key={idx}>{g || '—'}</li>)}
           </ul>
@@ -746,8 +738,7 @@ export default function CourseOpeningReport() {
           <ul className="list-disc ml-5 mb-3">
             {(report.impact_points || []).map((p, idx) => <li key={idx}>{p || '—'}</li>)}
           </ul>
-        </div>
-      </section>
+      </A4Document>
     </div>
   );
 }

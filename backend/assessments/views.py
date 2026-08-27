@@ -51,7 +51,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             })
         return Response({
             'course': int(course_id),
-            'student_count': Student.objects.filter(course_id=course_id).count(),
+            'student_count': faculty_scope(request.user, Student.objects.filter(course_id=course_id)).count(),
             'assessments': rows,
         })
 

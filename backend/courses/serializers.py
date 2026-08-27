@@ -1,5 +1,6 @@
 from django.db import transaction
 from rest_framework import serializers
+from .access import faculty_owns_course
 from .models import Course, CourseOutcome, CoPoMapping, LectureModule, CourseBook
 
 
@@ -7,6 +8,13 @@ class CoPoMappingSerializer(serializers.ModelSerializer):
     class Meta:
         model = CoPoMapping
         fields = ['id', 'course_outcome', 'po_key', 'level', 'justification']
+
+    def validate_course_outcome(self, course_outcome):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user and not faculty_owns_course(user, course_outcome.course):
+            raise serializers.ValidationError('You can only map outcomes on your own courses.')
+        return course_outcome
 
 
 class CourseOutcomeSerializer(serializers.ModelSerializer):
@@ -16,6 +24,13 @@ class CourseOutcomeSerializer(serializers.ModelSerializer):
         model = CourseOutcome
         fields = ['id', 'course', 'co_code', 'description', 'cognitive_level', 'order', 'mappings']
         extra_kwargs = {'description': {'required': False, 'allow_blank': True}}
+
+    def validate_course(self, course):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user and not faculty_owns_course(user, course):
+            raise serializers.ValidationError('You can only edit outcomes on your own courses.')
+        return course
 
     def create(self, validated_data):
         mappings_data = validated_data.pop('mappings', [])
