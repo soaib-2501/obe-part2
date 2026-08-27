@@ -1,6 +1,5 @@
 """
-Django settings for the OBE Full System (Part 2) backend.
-Built per the Software Requirements Specification (SRS v1.0).
+Django settings for the OBE Management System backend.
 """
 from pathlib import Path
 from datetime import timedelta

@@ -1,6 +1,8 @@
-# OBE Management System — Part 2
+# OBE Management System
 
-Web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, assessments, CO/PO/PSO attainment, and projects.
+Standalone web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, Assessment Tools, and related faculty workflows.
+
+This system is **independent**. It has its own UI, APIs, authentication, and database. It does not connect to or share data with any other OBE project.
 
 ```
 React (Vite + Tailwind)  →  Django REST + JWT  →  PostgreSQL (Neon)
@@ -101,7 +103,7 @@ obe-part2/
 ## First-time setup
 
 ### 1. Database
-Use **PostgreSQL** (Neon is configured via `DATABASE_URL`). Prefer a database separate from any Part 1 project.
+Use **PostgreSQL** (Neon is configured via `DATABASE_URL`). Create a dedicated database for this project.
 
 ### 2. Backend
 
