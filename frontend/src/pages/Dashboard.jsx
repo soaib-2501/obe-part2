@@ -30,10 +30,8 @@ export default function Dashboard() {
       .catch(() => setError('Could not load dashboard.'));
   }, []);
 
-  const projects = data?.projects ?? {};
   const levels = data?.level_distribution ?? { 0: 0, 1: 0, 2: 0, 3: 0 };
   const levelTotal = Object.values(levels).reduce((sum, n) => sum + n, 0);
-  const projectTotal = projects.total || 0;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -42,7 +40,7 @@ export default function Dashboard() {
 
       {error && <div className="bg-red-50 text-red-700 text-sm rounded p-3 mb-4">{error}</div>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Link to="/courses" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
           <p className="text-3xl font-bold text-slate-900">{data?.course_count ?? '—'}</p>
           <p className="text-sm text-slate-500 mt-1">Your Courses</p>
@@ -50,10 +48,6 @@ export default function Dashboard() {
         <Link to="/courses" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
           <p className="text-3xl font-bold text-slate-900">{data?.pending_attainment ?? '—'}</p>
           <p className="text-sm text-slate-500 mt-1">Pending Attainment Calculations</p>
-        </Link>
-        <Link to="/projects" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
-          <p className="text-3xl font-bold text-slate-900">{projects.active ?? '—'}</p>
-          <p className="text-sm text-slate-500 mt-1">Active Projects</p>
         </Link>
         <div className="bg-white shadow rounded-lg p-6">
           <p className="text-3xl font-bold text-slate-900">
@@ -63,42 +57,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <section className="bg-white shadow rounded-lg p-6">
-          <h2 className="font-semibold text-slate-900 mb-4">Attainment levels (0–3)</h2>
-          {levelTotal === 0 && <p className="text-sm text-slate-400">No attainment results yet. Enter marks and recalculate.</p>}
-          {['0', '1', '2', '3'].map((level) => (
-            <div key={level} className="mb-3 last:mb-0">
-              <div className="flex justify-between text-xs text-slate-500 mb-1">
-                <span>Level {level}</span>
-                <span>{levels[level] || 0} COs</span>
-              </div>
-              <Bar value={levels[level] || 0} total={levelTotal} className={LEVEL_COLORS[level]} />
+      <section className="bg-white shadow rounded-lg p-6 mb-8">
+        <h2 className="font-semibold text-slate-900 mb-4">Attainment levels (0–3)</h2>
+        {levelTotal === 0 && <p className="text-sm text-slate-400">No attainment results yet. Enter marks and recalculate.</p>}
+        {['0', '1', '2', '3'].map((level) => (
+          <div key={level} className="mb-3 last:mb-0">
+            <div className="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Level {level}</span>
+              <span>{levels[level] || 0} COs</span>
             </div>
-          ))}
-        </section>
-
-        <section className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Project evaluation</h2>
-            <Link to="/projects" className="text-xs font-semibold text-slate-600 hover:text-slate-900">View all</Link>
+            <Bar value={levels[level] || 0} total={levelTotal} className={LEVEL_COLORS[level]} />
           </div>
-          {projectTotal === 0 && <p className="text-sm text-slate-400">No projects yet.</p>}
-          {[
-            ['not_started', 'Not started', 'bg-slate-400'],
-            ['in_progress', 'In progress', 'bg-amber-400'],
-            ['evaluated', 'Evaluated', 'bg-emerald-500'],
-          ].map(([key, label, color]) => (
-            <div key={key} className="mb-3 last:mb-0">
-              <div className="flex justify-between text-xs text-slate-500 mb-1">
-                <span>{label}</span>
-                <span>{projects[key] || 0}</span>
-              </div>
-              <Bar value={projects[key] || 0} total={projectTotal} className={color} />
-            </div>
-          ))}
-        </section>
-      </div>
+        ))}
+      </section>
 
       <section className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b flex items-center justify-between">
@@ -113,14 +84,13 @@ export default function Dashboard() {
                 <th className="px-4 py-3">Year</th>
                 <th className="px-4 py-3 text-center">COs</th>
                 <th className="px-4 py-3 text-center">Avg attainment</th>
-                <th className="px-4 py-3 text-center">Projects</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
               {(data?.courses ?? []).length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-6 py-6 text-slate-400">No courses yet.</td>
+                  <td colSpan="5" className="px-6 py-6 text-slate-400">No courses yet.</td>
                 </tr>
               )}
               {(data?.courses ?? []).map((c) => (
@@ -136,11 +106,6 @@ export default function Dashboard() {
                   <td className="px-4 py-3 text-center">{c.outcome_count}</td>
                   <td className="px-4 py-3 text-center font-medium">
                     {c.avg_final != null ? `${c.avg_final}%` : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Link to={`/courses/${c.id}/projects`} className="hover:underline">
-                      {c.projects_active}/{c.project_total}
-                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     {c.outcome_count === 0 && <span className="text-xs text-slate-400">No COs</span>}

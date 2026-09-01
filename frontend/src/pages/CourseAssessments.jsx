@@ -2,33 +2,57 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import CourseSubnav from '../components/CourseSubnav';
+import SheetPreview from '../components/SheetPreview';
 
-const ASSESSMENT_TYPES = [
-  { value: 'T1', label: 'Test 1' },
-  { value: 'T2', label: 'Test 2' },
-  { value: 'T3', label: 'Test 3' },
-  { value: 'ASSIGNMENT', label: 'Assignment' },
-  { value: 'ATTENDANCE', label: 'Attendance' },
-  { value: 'PROJECT', label: 'Project' },
-  { value: 'FEEDBACK', label: 'Course Exit Feedback' },
+const BLOCKS = [
+  { key: 'T1', label: 'T1' },
+  { key: 'T2', label: 'T2' },
+  { key: 'T3', label: 'T3' },
+  { key: 'TA', label: 'TA / Project' },
+  { key: 'FEEDBACK', label: 'CO Feedback' },
 ];
-
-const DEFAULT_MAX = {
-  T1: 30,
-  T2: 30,
-  T3: 30,
-  ASSIGNMENT: 20,
-  ATTENDANCE: 5,
-  PROJECT: 20,
-  FEEDBACK: 5,
-};
-
-function typeLabel(value) {
-  return ASSESSMENT_TYPES.find((t) => t.value === value)?.label ?? value;
-}
 
 function list(data) {
   return data?.results ?? data ?? [];
+}
+
+function fmt(n, digits = 2) {
+  if (n === null || n === undefined || n === '') return '—';
+  const num = Number(n);
+  if (Number.isNaN(num)) return '—';
+  return num.toFixed(digits);
+}
+
+function LevelBadge({ level }) {
+  if (level === null || level === undefined) return <span className="text-slate-300">—</span>;
+  const colors = ['bg-slate-100 text-slate-500', 'bg-blue-100 text-blue-800', 'bg-emerald-100 text-emerald-800', 'bg-amber-100 text-amber-800'];
+  return (
+    <span className={`inline-block min-w-[18px] px-1 rounded text-[10px] font-semibold ${colors[level] || colors[0]}`}>
+      {level}
+    </span>
+  );
+}
+
+function BarChart({ title, items, unit = '' }) {
+  const max = Math.max(...items.map((i) => Number(i.value) || 0), 0.01);
+  return (
+    <div className="border rounded-lg p-4 bg-white">
+      <h3 className="text-sm font-semibold mb-3">{title}</h3>
+      <div className="space-y-2">
+        {items.map((i) => (
+          <div key={i.label}>
+            <div className="flex justify-between text-[11px] mb-0.5">
+              <span>{i.label}</span>
+              <span className="font-semibold">{i.display ?? `${i.value}${unit}`}</span>
+            </div>
+            <div className="h-4 bg-slate-100 rounded overflow-hidden">
+              <div className="h-4 rounded bg-blue-800" style={{ width: `${Math.min(100, ((Number(i.value) || 0) / max) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function CourseAssessments() {
@@ -36,128 +60,110 @@ export default function CourseAssessments() {
   const [course, setCourse] = useState(null);
   const [students, setStudents] = useState([]);
   const [assessments, setAssessments] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [marks, setMarks] = useState([]);
-  const [grid, setGrid] = useState({});
+  const [grades, setGrades] = useState([]);
+  const [sheet, setSheet] = useState(null);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [tab, setTab] = useState('roster');
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
-
   const [studentForm, setStudentForm] = useState({ roll_number: '', name: '' });
-  const [editingStudentId, setEditingStudentId] = useState(null);
-  const [studentEdit, setStudentEdit] = useState({ roll_number: '', name: '' });
-  const [editingAssessmentId, setEditingAssessmentId] = useState(null);
-  const [assessmentMax, setAssessmentMax] = useState('');
   const [bulkText, setBulkText] = useState('');
-  const [showBulk, setShowBulk] = useState(false);
-
-  const [newType, setNewType] = useState('T1');
-  const [newMax, setNewMax] = useState(DEFAULT_MAX.T1);
+  const [marksGrid, setMarksGrid] = useState({});
 
   const outcomes = course?.outcomes ?? [];
-  const selected = assessments.find((a) => a.id === selectedId) ?? null;
+  const block = assessments.find((a) => a.assessment_type === tab) || null;
 
-  async function loadCourseAndLists() {
-    const [courseRes, studentRes, assessmentRes] = await Promise.all([
-      api.get(`/courses/${id}/`),
-      api.get(`/assessments/students/?course=${id}`),
-      api.get(`/assessments/?course=${id}`),
-    ]);
-    setCourse(courseRes.data);
-    setStudents(list(studentRes.data));
-    const nextAssessments = list(assessmentRes.data);
-    setAssessments(nextAssessments);
-    setSelectedId((prev) => {
-      if (prev && nextAssessments.some((a) => a.id === prev)) return prev;
-      return nextAssessments[0]?.id ?? null;
-    });
+  const [loading, setLoading] = useState(true);
+
+  async function loadAll() {
+    setLoading(true);
+    setError('');
+    try {
+      const [courseRes, studentRes, assessmentRes, gradeRes] = await Promise.all([
+        api.get(`/courses/${id}/`),
+        api.get(`/assessments/students/?course=${id}`),
+        api.get(`/assessments/?course=${id}`),
+        api.get(`/assessments/grades/?course=${id}`),
+      ]);
+      setCourse(courseRes.data);
+      setStudents(list(studentRes.data));
+      const nextA = list(assessmentRes.data).filter((a) => BLOCKS.some((b) => b.key === a.assessment_type));
+      const unique = [];
+      const seen = new Set();
+      for (const a of nextA) {
+        if (seen.has(a.assessment_type)) continue;
+        seen.add(a.assessment_type);
+        unique.push(a);
+      }
+      if (unique.length < BLOCKS.length) {
+        await api.post('/assessments/ensure/', { course: Number(id) });
+        const refreshed = list((await api.get(`/assessments/?course=${id}`)).data)
+          .filter((a) => BLOCKS.some((b) => b.key === a.assessment_type));
+        const uniq2 = [];
+        const seen2 = new Set();
+        for (const a of refreshed) {
+          if (seen2.has(a.assessment_type)) continue;
+          seen2.add(a.assessment_type);
+          uniq2.push(a);
+        }
+        setAssessments(uniq2);
+      } else {
+        setAssessments(unique);
+      }
+      setGrades(list(gradeRes.data));
+    } catch (err) {
+      setError(formatError(err, 'Failed to load course data.'));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function loadMarks(assessmentId) {
-    if (!assessmentId) {
-      setMarks([]);
-      setGrid({});
+  async function loadMarks(assessment) {
+    if (!assessment) {
+      setMarksGrid({});
       return;
     }
-    const res = await api.get(`/assessments/marks/?assessment=${assessmentId}`);
-    const rows = list(res.data);
-    setMarks(rows);
+    const res = await api.get(`/assessments/marks/?assessment=${assessment.id}`);
     const next = {};
-    rows.forEach((row) => {
-      next[`${row.student}-${row.course_outcome}`] = String(row.marks_obtained);
+    list(res.data).forEach((row) => {
+      if (row.question) next[`${row.student}-${row.question}`] = row.marks_obtained ?? '';
     });
-    setGrid(next);
+    setMarksGrid(next);
   }
 
   useEffect(() => {
-    loadCourseAndLists().catch(() => setError('Failed to load course data.'));
+    loadAll();
   }, [id]);
 
   useEffect(() => {
-    loadMarks(selectedId).catch(() => setError('Failed to load marks.'));
-  }, [selectedId]);
+    if (block) loadMarks(block).catch(() => setError('Failed to load marks.'));
+  }, [block?.id]);
 
-  const usedTypes = useMemo(() => new Set(assessments.map((a) => a.assessment_type)), [assessments]);
-  const availableTypes = ASSESSMENT_TYPES.filter((t) => !usedTypes.has(t.value));
+  async function loadSheet() {
+    setSheetLoading(true);
+    setError('');
+    try {
+      const res = await api.get(`/attainments/sheet/?course=${id}`);
+      setSheet(res.data);
+    } catch (err) {
+      setError(formatError(err, 'Could not compute attainment sheet.'));
+    } finally {
+      setSheetLoading(false);
+    }
+  }
 
   useEffect(() => {
-    if (!availableTypes.some((t) => t.value === newType)) {
-      const next = availableTypes[0];
-      setNewType(next?.value ?? '');
-      setNewMax(next ? DEFAULT_MAX[next.value] : 10);
-    }
-  }, [availableTypes, newType]);
+    if (tab === 'attainment' || tab === 'result') loadSheet();
+  }, [tab, id]);
 
-  function cellKey(studentId, coId) {
-    return `${studentId}-${coId}`;
+  function patchBlock(fields) {
+    setAssessments((prev) => prev.map((a) => (a.id === block.id ? { ...a, ...fields } : a)));
   }
 
-  function setCell(studentId, coId, value) {
-    setGrid((prev) => ({ ...prev, [cellKey(studentId, coId)]: value }));
-  }
-
-  async function importStudentsCsv(file) {
-    const text = await file.text();
-    setBulkText(text);
-    setShowBulk(true);
-  }
-
-  async function importMarksCsv(file) {
-    if (!selected) {
-      setError('Select an assessment before importing marks.');
-      return;
-    }
-    setError('');
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const next = { ...grid };
-    let applied = 0;
-    for (const line of lines) {
-      if (/^roll/i.test(line)) continue;
-      const parts = line.split(/[,\t]/).map((part) => part.trim());
-      const [roll, coCode, mark] = parts;
-      const student = students.find((s) => s.roll_number.toLowerCase() === String(roll).toLowerCase());
-      const co = outcomes.find((o) => o.co_code.toLowerCase() === String(coCode).toLowerCase());
-      if (!student || !co || mark === undefined) continue;
-      next[cellKey(student.id, co.id)] = mark;
-      applied += 1;
-    }
-    setGrid(next);
-    setStatus(`Loaded ${applied} mark cells from CSV. Click Save marks to store them.`);
-  }
-
-  function applyAttendancePercent(studentId, percent) {
-    if (!selected) return;
-    const pct = Number(percent);
-    if (Number.isNaN(pct)) return;
-    const marksValue = ((pct / 100) * selected.max_marks).toFixed(2);
-    setGrid((prev) => {
-      const next = { ...prev };
-      outcomes.forEach((co) => {
-        next[cellKey(studentId, co.id)] = marksValue;
-      });
-      return next;
-    });
+  function patchQuestions(questions) {
+    patchBlock({ questions });
   }
 
   async function addStudent(e) {
@@ -166,158 +172,97 @@ export default function CourseAssessments() {
     try {
       await api.post('/assessments/students/', { ...studentForm, course: Number(id) });
       setStudentForm({ roll_number: '', name: '' });
-      await loadCourseAndLists();
+      await loadAll();
     } catch (err) {
       setError(formatError(err, 'Could not add student.'));
     }
   }
 
-  async function addBulkStudents(e) {
+  async function addBulk(e) {
     e.preventDefault();
     setError('');
-    const lines = bulkText.split('\n').map((line) => line.trim()).filter(Boolean);
-    const payload = [];
-    for (const line of lines) {
-      if (/^roll/i.test(line)) continue;
-      const [roll_number, ...rest] = line.split(/[,\t]/).map((part) => part.trim());
-      const name = rest.join(' ').trim();
-      if (!roll_number || !name) {
-        setError('Each line must be: roll number, name');
-        return;
-      }
-      payload.push({ roll_number, name, course: Number(id) });
-    }
+    const lines = bulkText.split('\n').map((l) => l.trim()).filter(Boolean);
     try {
-      for (const row of payload) {
-        await api.post('/assessments/students/', row);
+      for (const line of lines) {
+        if (/^roll/i.test(line) || /^enrol/i.test(line)) continue;
+        const [roll_number, ...rest] = line.split(/[,\t]/).map((p) => p.trim());
+        const name = rest.join(' ').trim();
+        if (!roll_number || !name) continue;
+        await api.post('/assessments/students/', { roll_number, name, course: Number(id) });
       }
       setBulkText('');
-      setShowBulk(false);
-      await loadCourseAndLists();
+      await loadAll();
     } catch (err) {
       setError(formatError(err, 'Could not import students.'));
     }
   }
 
   async function deleteStudent(studentId) {
-    if (!window.confirm('Remove this student and their marks from the course?')) return;
-    setError('');
+    if (!window.confirm('Remove this student and all their marks from this course offering?')) return;
     await api.delete(`/assessments/students/${studentId}/`);
-    if (editingStudentId === studentId) setEditingStudentId(null);
-    await loadCourseAndLists();
-    await loadMarks(selectedId);
+    await loadAll();
+    if (block) await loadMarks(block);
   }
 
-  async function saveStudentEdit(studentId) {
+  async function saveBlockSettings() {
+    if (!block) return;
+    setSaving(true);
     setError('');
     try {
-      await api.patch(`/assessments/students/${studentId}/`, {
-        roll_number: studentEdit.roll_number,
-        name: studentEdit.name,
-        course: Number(id),
+      await api.patch(`/assessments/${block.id}/`, {
+        exam_label: block.exam_label,
+        target_percent: Number(block.target_percent) || 50,
+        total_students: Number(block.total_students) || students.length,
+        appeared: Number(block.appeared) || 0,
+        use_ceiling: !!block.use_ceiling,
+        questions: (block.questions || []).map((q, i) => ({
+          id: q.id,
+          key: q.key || `Q${i + 1}`,
+          label: q.label,
+          max_marks: q.max_marks,
+          course_outcome: q.course_outcome || null,
+          order: i,
+        })),
       });
-      setEditingStudentId(null);
-      await loadCourseAndLists();
+      setStatus('Settings saved.');
+      await loadAll();
     } catch (err) {
-      setError(formatError(err, 'Could not update student.'));
+      setError(formatError(err, 'Could not save settings.'));
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function saveAssessmentMax(assessmentId) {
-    setError('');
-    const maxMarks = Number(assessmentMax);
-    if (!maxMarks || maxMarks < 1) {
-      setError('Max marks must be at least 1.');
-      return;
-    }
-    try {
-      await api.patch(`/assessments/${assessmentId}/`, { max_marks: maxMarks });
-      setEditingAssessmentId(null);
-      await loadCourseAndLists();
-    } catch (err) {
-      setError(formatError(err, 'Could not update assessment.'));
-    }
-  }
-
-  async function addAssessment(e) {
-    e.preventDefault();
-    setError('');
-    if (!newType) return;
-    try {
-      const res = await api.post('/assessments/', {
-        course: Number(id),
-        assessment_type: newType,
-        max_marks: Number(newMax),
-      });
-      await loadCourseAndLists();
-      setSelectedId(res.data.id);
-      const remaining = ASSESSMENT_TYPES.filter(
-        (t) => t.value !== newType && !usedTypes.has(t.value)
-      );
-      const nextType = remaining[0]?.value ?? '';
-      setNewType(nextType);
-      setNewMax(nextType ? DEFAULT_MAX[nextType] : 10);
-    } catch (err) {
-      setError(formatError(err, 'Could not create assessment.'));
-    }
-  }
-
-  async function deleteAssessment(assessmentId) {
-    if (!window.confirm('Delete this assessment and all of its marks?')) return;
-    setError('');
-    await api.delete(`/assessments/${assessmentId}/`);
-    await loadCourseAndLists();
-  }
-
-  async function saveMarks({ recalculate }) {
-    if (!selected) return;
+  async function saveMarks() {
+    if (!block) return;
+    setSaving(true);
     setError('');
     setStatus('');
-    setSaving(true);
     try {
-      const toUpsert = [];
-      const toDelete = [];
+      const marks = [];
       for (const student of students) {
-        for (const co of outcomes) {
-          const key = cellKey(student.id, co.id);
-          const raw = grid[key];
-          const existing = marks.find(
-            (m) => m.student === student.id && m.course_outcome === co.id
-          );
-          if (raw === undefined || raw === '') {
-            if (existing) toDelete.push(existing.id);
-            continue;
-          }
-          const marksObtained = Number(raw);
-          if (Number.isNaN(marksObtained)) {
-            setError(`Invalid mark for ${student.roll_number} / ${co.co_code}.`);
+        for (const q of block.questions || []) {
+          if (!q.id) continue;
+          const raw = marksGrid[`${student.id}-${q.id}`];
+          if (raw === undefined || raw === '') continue;
+          const num = Number(raw);
+          if (Number.isNaN(num)) {
+            setError(`Invalid mark for ${student.roll_number} / ${q.label}`);
             setSaving(false);
             return;
           }
-          if (marksObtained < 0 || marksObtained > selected.max_marks) {
-            setError(`Marks for ${student.roll_number} must be between 0 and ${selected.max_marks}.`);
-            setSaving(false);
-            return;
-          }
-          toUpsert.push({
-            assessment: selected.id,
-            student: student.id,
-            course_outcome: co.id,
-            marks_obtained: marksObtained,
-          });
+          marks.push({ student: student.id, question: q.id, marks_obtained: num });
         }
       }
-      if (toUpsert.length) {
-        await api.post('/assessments/marks/', toUpsert);
+      const res = await api.post('/assessments/marks/replace/', { assessment: block.id, marks });
+      if (res.data) {
+        patchBlock({
+          total_students: res.data.total_students,
+          appeared: res.data.appeared,
+        });
       }
-      await Promise.all(toDelete.map((markId) => api.delete(`/assessments/marks/${markId}/`)));
-      if (recalculate) {
-        await api.post('/attainments/calculate/', { course: Number(id) });
-        setStatus('Marks saved and attainment recalculated.');
-      } else {
-        setStatus('Marks saved.');
-      }
-      await loadMarks(selected.id);
+      setStatus(`Saved ${marks.length} marks.`);
+      setSheet(null);
     } catch (err) {
       setError(formatError(err, 'Could not save marks.'));
     } finally {
@@ -325,276 +270,404 @@ export default function CourseAssessments() {
     }
   }
 
-  if (!course) return <div className="p-8">Loading…</div>;
+  const tabs = useMemo(() => [
+    { id: 'roster', label: 'Roster' },
+    ...BLOCKS,
+    { id: 'attainment', label: 'Attainment' },
+    { id: 'result', label: 'Result' },
+  ], []);
+
+  if (loading && !course) return <div className="p-8">Loading…</div>;
+  if (!course) {
+    return (
+      <div className="p-8">
+        <p className="text-red-700 text-sm">{error || 'Could not load this course.'}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700">← Back to Courses</Link>
-      <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1">{course.course_code} — {course.course_name}</h1>
-      <p className="text-sm text-slate-500 mb-4">{course.semester} · {course.academic_year}</p>
+    <div className="p-8 max-w-6xl mx-auto print:p-0 print:max-w-none">
+      <Link to="/courses" className="text-sm text-slate-500 hover:text-slate-700 no-print">← Back to Courses</Link>
+      <h1 className="text-2xl font-bold text-slate-900 mt-2 mb-1 no-print">{course.course_code} — {course.course_name}</h1>
+      <p className="text-sm text-slate-500 mb-4 no-print">
+        {course.semester} · {course.academic_year} · one shared student list for T1, T2, T3, TA and Feedback
+      </p>
       <CourseSubnav courseId={id} />
 
-      {error && <div className="bg-red-50 text-red-700 text-sm rounded p-3 mb-4">{error}</div>}
-      {status && <div className="bg-emerald-50 text-emerald-800 text-sm rounded p-3 mb-4">{status}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-sm rounded p-3 mb-4 no-print">{error}</div>}
+      {status && <div className="bg-emerald-50 text-emerald-800 text-sm rounded p-3 mb-4 no-print">{status}</div>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <section className="lg:col-span-2 bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Students</h2>
-            <button
-              type="button"
-              onClick={() => setShowBulk((v) => !v)}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-            >
-              {showBulk ? 'Hide bulk import' : 'Bulk import'}
-            </button>
-          </div>
-
-          <form onSubmit={addStudent} className="flex gap-2 mb-3">
-            <input
-              placeholder="Roll number"
-              className="border rounded px-2 py-1.5 text-sm w-40"
-              value={studentForm.roll_number}
-              onChange={(e) => setStudentForm({ ...studentForm, roll_number: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Name"
-              className="border rounded px-2 py-1.5 text-sm flex-1"
-              value={studentForm.name}
-              onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
-              required
-            />
-            <button type="submit" className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold">
-              Add
-            </button>
-          </form>
-
-          {showBulk && (
-            <form onSubmit={addBulkStudents} className="mb-4">
-              <textarea
-                className="w-full border rounded px-3 py-2 text-sm h-28"
-                placeholder={'One student per line: roll number, name\n1RN21CS001, Aisha Khan'}
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-              />
-              <button type="submit" className="mt-2 bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs font-semibold">
-                Import students
-              </button>
-              <label className="ml-3 text-xs text-slate-600 cursor-pointer hover:underline">
-                Or upload CSV
-                <input type="file" accept=".csv,text/csv" className="hidden"
-                  onChange={(e) => { if (e.target.files[0]) importStudentsCsv(e.target.files[0]); e.target.value = ''; }} />
-              </label>
-            </form>
-          )}
-
-          <div className="border rounded divide-y max-h-56 overflow-auto">
-            {students.length === 0 && <p className="p-3 text-sm text-slate-400">No students yet.</p>}
-            {students.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                {editingStudentId === s.id ? (
-                  <>
-                    <input className="border rounded px-2 py-1 text-sm w-32" value={studentEdit.roll_number}
-                      onChange={(e) => setStudentEdit({ ...studentEdit, roll_number: e.target.value })} />
-                    <input className="border rounded px-2 py-1 text-sm flex-1" value={studentEdit.name}
-                      onChange={(e) => setStudentEdit({ ...studentEdit, name: e.target.value })} />
-                    <button type="button" onClick={() => saveStudentEdit(s.id)} className="text-xs font-semibold text-slate-900">Save</button>
-                    <button type="button" onClick={() => setEditingStudentId(null)} className="text-xs text-slate-500">Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <div className="min-w-0 flex-1">
-                      <span className="font-medium text-slate-900">{s.roll_number}</span>
-                      <span className="text-slate-500"> · {s.name}</span>
-                    </div>
-                    <button type="button" onClick={() => { setEditingStudentId(s.id); setStudentEdit({ roll_number: s.roll_number, name: s.name }); }}
-                      className="text-xs text-slate-600 hover:underline">Edit</button>
-                    <button type="button" onClick={() => deleteStudent(s.id)} className="text-xs text-red-600 hover:underline">
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-white shadow rounded-lg p-6">
-          <h2 className="font-semibold text-slate-900 mb-4">Assessments</h2>
-          <form onSubmit={addAssessment} className="space-y-2 mb-4">
-            <select
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              value={newType}
-              onChange={(e) => {
-                setNewType(e.target.value);
-                setNewMax(DEFAULT_MAX[e.target.value] ?? 10);
-              }}
-              disabled={!availableTypes.length}
-            >
-              {availableTypes.length === 0 && <option value="">All types added</option>}
-              {availableTypes.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min="1"
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              value={newMax}
-              onChange={(e) => setNewMax(e.target.value)}
-              disabled={!availableTypes.length}
-            />
-            <button
-              type="submit"
-              disabled={!availableTypes.length}
-              className="w-full bg-slate-900 text-white py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-            >
-              Add assessment
-            </button>
-          </form>
-
-          <div className="space-y-1">
-            {assessments.length === 0 && <p className="text-sm text-slate-400">No assessments yet.</p>}
-            {assessments.map((a) => (
-              <div
-                key={a.id}
-                className={`flex items-center justify-between gap-2 rounded px-3 py-2 text-sm ${
-                  a.id === selectedId ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'
-                }`}
-              >
-                {editingAssessmentId === a.id ? (
-                  <>
-                    <span className="flex-1">{typeLabel(a.assessment_type)}</span>
-                    <input type="number" min="1" className="border rounded px-2 py-0.5 w-20 text-slate-900 text-xs"
-                      value={assessmentMax} onChange={(e) => setAssessmentMax(e.target.value)}
-                      onClick={(e) => e.stopPropagation()} />
-                    <button type="button" className={`text-xs ${a.id === selectedId ? 'text-white' : 'text-slate-900'}`}
-                      onClick={(e) => { e.stopPropagation(); saveAssessmentMax(a.id); }}>Save</button>
-                    <button type="button" className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-slate-500'}`}
-                      onClick={(e) => { e.stopPropagation(); setEditingAssessmentId(null); }}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="flex-1 text-left" onClick={() => setSelectedId(a.id)}>
-                      {typeLabel(a.assessment_type)} · max {a.max_marks}
-                    </button>
-                    <button
-                      type="button"
-                      className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-slate-600'} hover:underline`}
-                      onClick={(e) => { e.stopPropagation(); setEditingAssessmentId(a.id); setAssessmentMax(String(a.max_marks)); }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className={`text-xs ${a.id === selectedId ? 'text-slate-300' : 'text-red-600'} hover:underline`}
-                      onClick={(e) => { e.stopPropagation(); deleteAssessment(a.id); }}
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+      <div className="flex flex-wrap gap-1 mb-4 no-print">
+        {tabs.map((t) => (
+          <button
+            key={t.id || t.key}
+            type="button"
+            onClick={() => { setTab(t.id || t.key); setStatus(''); setPreviewing(false); }}
+            className={`px-3 py-1.5 rounded text-xs font-semibold ${(t.id || t.key) === tab ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-700'}`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <section className="bg-white shadow rounded-lg p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="font-semibold text-slate-900">Marks entry</h2>
-            <p className="text-xs text-slate-500 mt-1">
-              {selected
-                ? `${typeLabel(selected.assessment_type)} — enter marks out of ${selected.max_marks} for each CO. Empty cells are not saved.`
-                : 'Create an assessment to enter marks.'}
-              {selected?.assessment_type === 'ATTENDANCE' && ' Enter class attendance % in the extra column to fill all CO cells.'}
-            </p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <label className="text-xs font-semibold text-slate-600 cursor-pointer hover:underline">
-              Import marks CSV
-              <input type="file" accept=".csv,text/csv" className="hidden"
-                onChange={(e) => { if (e.target.files[0]) importMarksCsv(e.target.files[0]); e.target.value = ''; }} />
-            </label>
-            <button
-              type="button"
-              disabled={!selected || saving || !students.length || !outcomes.length}
-              onClick={() => saveMarks({ recalculate: false })}
-              className="bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save marks'}
-            </button>
-            <button
-              type="button"
-              disabled={!selected || saving || !students.length || !outcomes.length}
-              onClick={() => saveMarks({ recalculate: true })}
-              className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-            >
-              Save & recalculate
-            </button>
-          </div>
-        </div>
-
-        {!outcomes.length && (
-          <p className="text-sm text-slate-500">Add course outcomes on the mapping tab before entering marks.</p>
-        )}
-        {outcomes.length > 0 && students.length === 0 && (
-          <p className="text-sm text-slate-500">Add students above before entering marks.</p>
-        )}
-
-        {selected && students.length > 0 && outcomes.length > 0 && (
-          <div className="overflow-auto">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
-                <tr className="text-left text-slate-500 border-b">
-                  <th className="py-2 pr-3">Roll</th>
-                  <th className="pr-3">Name</th>
-                  {outcomes.map((co) => (
-                    <th key={co.id} className="text-center px-1">{co.co_code}</th>
-                  ))}
-                  {selected.assessment_type === 'ATTENDANCE' && <th className="text-center px-1">Attend %</th>}
+      {tab === 'roster' && (
+        <section className="bg-white shadow rounded-lg p-6">
+          <h2 className="font-semibold mb-1">Student roster</h2>
+          <p className="text-xs text-slate-500 mb-4">Add once. The same students appear on every exam sheet for this course offering.</p>
+          <form onSubmit={addStudent} className="flex gap-2 mb-3">
+            <input required placeholder="Enrol no" className="border rounded px-2 py-1.5 text-sm w-40"
+              value={studentForm.roll_number} onChange={(e) => setStudentForm({ ...studentForm, roll_number: e.target.value })} />
+            <input required placeholder="Name" className="border rounded px-2 py-1.5 text-sm flex-1"
+              value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} />
+            <button type="submit" className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold">Add student</button>
+          </form>
+          <textarea className="w-full border rounded px-3 py-2 text-sm h-24 mb-2"
+            placeholder={'Bulk: enrol, name — one per line\n2403030001, SHANTAM ATTRY'}
+            value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
+          <button type="button" onClick={addBulk} className="bg-slate-200 px-3 py-1.5 rounded text-xs font-semibold mb-4">Import roster</button>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-slate-500 border-b"><th className="py-2">S.No</th><th>Enrol No</th><th>Name</th><th></th></tr></thead>
+            <tbody>
+              {students.length === 0 && <tr><td colSpan={4} className="py-4 text-slate-400">No students yet.</td></tr>}
+              {students.map((s, i) => (
+                <tr key={s.id} className="border-b">
+                  <td className="py-2">{i + 1}</td>
+                  <td className="font-medium">{s.roll_number}</td>
+                  <td>{s.name}</td>
+                  <td><button type="button" className="text-xs text-red-600" onClick={() => deleteStudent(s.id)}>Remove</button></td>
                 </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3 font-medium whitespace-nowrap">{s.roll_number}</td>
-                    <td className="pr-3 text-slate-600 whitespace-nowrap">{s.name}</td>
-                    {outcomes.map((co) => (
-                      <td key={co.id} className="text-center px-1 py-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max={selected.max_marks}
-                          step="0.5"
-                          className="border rounded w-16 text-center text-xs py-1"
-                          value={grid[cellKey(s.id, co.id)] ?? ''}
-                          onChange={(e) => setCell(s.id, co.id, e.target.value)}
-                        />
-                      </td>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {BLOCKS.some((b) => b.key === tab) && block && (
+        <div className="space-y-4">
+          <div className="no-print space-y-4">
+          <section className="bg-white shadow rounded-lg p-6">
+            <h2 className="font-semibold mb-3">{block.exam_label || tab} settings</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+              <label className="text-xs">Exam label
+                <input className="mt-1 w-full border rounded px-2 py-1 text-sm" value={block.exam_label || ''}
+                  onChange={(e) => patchBlock({ exam_label: e.target.value })} />
+              </label>
+              <label className="text-xs">Target %
+                <input className="mt-1 w-full border rounded px-2 py-1 text-sm" value={block.target_percent}
+                  onChange={(e) => patchBlock({ target_percent: e.target.value })} />
+              </label>
+              <label className="text-xs">Total students
+                <input className="mt-1 w-full border rounded px-2 py-1 text-sm"
+                  value={Number(block.total_students) > 0 ? block.total_students : students.length}
+                  onChange={(e) => patchBlock({ total_students: e.target.value })} />
+              </label>
+              <label className="text-xs">No. appeared
+                <input className="mt-1 w-full border rounded px-2 py-1 text-sm"
+                  value={Number(block.appeared) > 0 ? block.appeared : ''}
+                  placeholder="auto from marks"
+                  onChange={(e) => patchBlock({ appeared: e.target.value })} />
+              </label>
+              <label className="text-xs flex items-center gap-2 mt-5">
+                <input type="checkbox" checked={!!block.use_ceiling} onChange={(e) => patchBlock({ use_ceiling: e.target.checked })} />
+                Use ceiling
+              </label>
+            </div>
+            <h3 className="text-sm font-semibold mb-2">Questions / components (label · max · CO)</h3>
+            {(block.questions || []).map((q, i) => (
+              <div key={q.id || i} className="grid grid-cols-[1fr_80px_140px_28px] gap-2 mb-2">
+                <input className="border rounded px-2 py-1 text-sm" value={q.label}
+                  onChange={(e) => {
+                    const questions = [...block.questions];
+                    questions[i] = { ...q, label: e.target.value };
+                    patchQuestions(questions);
+                  }} />
+                <input className="border rounded px-2 py-1 text-sm" value={q.max_marks}
+                  onChange={(e) => {
+                    const questions = [...block.questions];
+                    questions[i] = { ...q, max_marks: e.target.value };
+                    patchQuestions(questions);
+                  }} />
+                <select className="border rounded px-2 py-1 text-sm" value={q.course_outcome || ''}
+                  onChange={(e) => {
+                    const questions = [...block.questions];
+                    questions[i] = { ...q, course_outcome: e.target.value ? Number(e.target.value) : null };
+                    patchQuestions(questions);
+                  }}>
+                  <option value="">—</option>
+                  {outcomes.map((co) => <option key={co.id} value={co.id}>{co.co_code}</option>)}
+                </select>
+                <button type="button" className="text-red-600" onClick={() => patchQuestions(block.questions.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="text-xs font-semibold mr-3" onClick={() => patchQuestions([
+              ...(block.questions || []),
+              { key: `Q${Date.now()}`, label: 'New Q', max_marks: 5, course_outcome: null },
+            ])}>+ Add question</button>
+            <button type="button" onClick={saveBlockSettings} disabled={saving} className="bg-slate-200 px-3 py-1.5 rounded text-xs font-semibold">
+              Save settings
+            </button>
+          </section>
+
+          <section className="bg-white shadow rounded-lg p-6 overflow-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="font-semibold">Marks — {students.length} students</h2>
+              <button type="button" onClick={saveMarks} disabled={saving || !students.length} className="bg-slate-900 text-white px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save marks & calculate'}
+              </button>
+            </div>
+            {students.length === 0 && <p className="text-sm text-slate-500">Add students on the Roster tab first.</p>}
+            {students.length > 0 && (
+              <table className="w-full text-xs min-w-[640px] border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="border p-1">S.No</th>
+                    <th className="border p-1">Enrol No</th>
+                    <th className="border p-1">Name</th>
+                    {(block.questions || []).map((q) => (
+                      <th key={q.id || q.key} className="border p-1">{q.label} ({q.max_marks})</th>
                     ))}
-                    {selected.assessment_type === 'ATTENDANCE' && (
-                      <td className="text-center px-1 py-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          placeholder="%"
-                          className="border rounded w-16 text-center text-xs py-1"
-                          onChange={(e) => applyAttendancePercent(s.id, e.target.value)}
-                        />
-                      </td>
-                    )}
                   </tr>
+                </thead>
+                <tbody>
+                  {students.map((s, i) => (
+                    <tr key={s.id}>
+                      <td className="border p-1 text-center">{i + 1}</td>
+                      <td className="border p-1">{s.roll_number}</td>
+                      <td className="border p-1">{s.name}</td>
+                      {(block.questions || []).map((q) => (
+                        <td key={q.id || q.key} className="border p-0">
+                          <input
+                            className="w-16 text-center py-1 bg-transparent"
+                            value={marksGrid[`${s.id}-${q.id}`] ?? ''}
+                            onChange={(e) => setMarksGrid((prev) => ({ ...prev, [`${s.id}-${q.id}`]: e.target.value }))}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+          </div>
+          <SheetPreview
+            kind={tab}
+            course={course}
+            students={students}
+            block={block}
+            marksGrid={marksGrid}
+            outcomes={outcomes}
+            previewing={previewing}
+            onToggle={() => setPreviewing((v) => !v)}
+          />
+        </div>
+      )}
+
+      {tab === 'attainment' && (
+        <section className="bg-white shadow rounded-lg p-6 overflow-auto">
+          <div className="no-print">
+          <div className="flex flex-wrap justify-between gap-2 mb-4">
+            <h2 className="font-semibold">Average CO-Attainment</h2>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={sheetLoading} className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded font-semibold disabled:opacity-50"
+                onClick={async () => {
+                  api.post('/attainments/calculate/', { course: Number(id) }).catch(() => {});
+                  await loadSheet();
+                  setStatus('Sheet recalculated from saved marks.');
+                }}>{sheetLoading ? 'Computing…' : 'Recalculate'}</button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">
+            Direct = 60% T-AVG + 20% Assgn/TA; Final = Direct + 20% Indirect (Feedback). Levels: ≥80 → 3, ≥70 → 2, ≥60 → 1.
+            Appeared = students with marks (or the No. appeared you save). Ceiling rounds % up for T3/TA when checked.
+          </p>
+          {sheetLoading && !sheet && <p className="text-sm text-slate-500">Computing sheet…</p>}
+          <table className="w-full text-xs border-collapse min-w-[960px]">
+            <thead>
+              <tr className="bg-slate-50">
+                {['COs', 'T1', 'T2', 'T3', 'T-AVG', 'Assgn/Project/CT (TA)', 'Direct (60% T-AVG + 20% Assgn)', 'Indirect (Feedback)', 'Final (Direct + 20% Indirect)', 'CIE', 'SIE'].map((h) => (
+                  <th key={h} className="border p-1">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(sheet?.cos || []).map((row) => (
+                <tr key={row.id}>
+                  <td className="border p-1 font-semibold">{row.co_code}</td>
+                  <td className="border p-1 text-center"><LevelBadge level={row.t1_level} /></td>
+                  <td className="border p-1 text-center"><LevelBadge level={row.t2_level} /></td>
+                  <td className="border p-1 text-center"><LevelBadge level={row.t3_level} /></td>
+                  <td className="border p-1 text-center">{fmt(row.t_avg)}</td>
+                  <td className="border p-1 text-center"><LevelBadge level={row.ta_level} /></td>
+                  <td className="border p-1 text-center">{fmt(row.direct)}</td>
+                  <td className="border p-1 text-center"><LevelBadge level={row.indirect} /></td>
+                  <td className="border p-1 text-center font-bold">{fmt(row.final)}</td>
+                  <td className="border p-1 text-center">{fmt(row.cie)}</td>
+                  <td className="border p-1 text-center">{fmt(row.sie)}</td>
+                </tr>
+              ))}
+              {!sheetLoading && !(sheet?.cos || []).length && (
+                <tr><td colSpan={11} className="border p-3 text-slate-500">No CO rows. Add course outcomes in Course Description, then save marks.</td></tr>
+              )}
+            </tbody>
+          </table>
+
+          {(sheet?.exam_summaries || []).map((ex) => (
+            <div key={ex.type} className="mt-6">
+              <h3 className="font-semibold mb-1">{ex.label} — CO summary</h3>
+              <p className="text-[11px] text-slate-500 mb-2">Target ≥ {ex.target_percent}% · Total {ex.total_students} · Appeared {ex.appeared}{ex.use_ceiling ? ' · ceiling on' : ''}</p>
+              <table className="w-full text-xs border-collapse max-w-3xl">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="border p-1"> </th>
+                    {ex.cos.map((c) => <th key={c.co_code} className="border p-1">{c.co_code}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border p-1">No. scored ≥ target</td>
+                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center">{c.count_at_target}</td>)}
+                  </tr>
+                  <tr>
+                    <td className="border p-1">% scored ≥ target</td>
+                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center">{fmt(c.pct_at_target, 1)}%</td>)}
+                  </tr>
+                  <tr>
+                    <td className="border p-1">CO attainment level</td>
+                    {ex.cos.map((c) => <td key={c.co_code} className="border p-1 text-center"><LevelBadge level={c.level} /></td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          <h3 className="font-semibold mt-8 mb-2">CO–PO–PSO Mapping</h3>
+          <table className="w-full text-xs border-collapse min-w-[640px]">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="border p-1">COs</th>
+                <th className="border p-1">CO Attainment</th>
+                {(sheet?.po_keys || []).map((po) => <th key={po} className="border p-1">{po}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {(sheet?.cos || []).map((row) => (
+                <tr key={row.id}>
+                  <td className="border p-1 font-semibold">{row.co_code}</td>
+                  <td className="border p-1 text-center">{fmt(row.final)}</td>
+                  {(sheet?.po_keys || []).map((po) => (
+                    <td key={po} className="border p-1 text-center">{row.mappings?.[po] ?? ''}</td>
+                  ))}
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-bold">
+                <td className="border p-1">{sheet?.nba_code || course.nba_code || course.course_code}</td>
+                <td className="border p-1 text-center">Average</td>
+                {(sheet?.po_keys || []).map((po) => (
+                  <td key={po} className="border p-1 text-center">{fmt(sheet?.mapping_avg?.[po])}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 className="font-semibold mt-8 mb-2">PO-PSO Attainment</h3>
+          <table className="w-full text-xs border-collapse max-w-3xl mb-6">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="border p-1">Course</th>
+                {(sheet?.po_keys || []).map((po) => <th key={po} className="border p-1">{po}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border p-1 font-semibold">NBA Code: {sheet?.nba_code || course.nba_code || '—'}</td>
+                {(sheet?.po_keys || []).map((po) => (
+                  <td key={po} className="border p-1 text-center font-bold">{fmt(sheet?.po_attainment?.[po])}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+          <div className="grid md:grid-cols-2 gap-4">
+            <BarChart
+              title="Final CO attainment"
+              items={(sheet?.cos || []).map((r) => ({ label: r.co_code, value: Number(r.final) || 0, display: fmt(r.final) }))}
+            />
+            <BarChart
+              title="PO / PSO attainment"
+              items={(sheet?.po_keys || []).map((po) => ({ label: po, value: Number(sheet?.po_attainment?.[po]) || 0, display: fmt(sheet?.po_attainment?.[po]) }))}
+            />
+          </div>
+          </div>
+          <SheetPreview
+            kind="attainment"
+            course={course}
+            sheet={sheet}
+            previewing={previewing}
+            onToggle={() => setPreviewing((v) => !v)}
+          />
+        </section>
+      )}
+
+      {tab === 'result' && (
+        <section className="bg-white shadow rounded-lg p-6 overflow-auto">
+          <div className="no-print">
+          <div className="flex flex-wrap justify-between gap-2 mb-3">
+            <h2 className="font-semibold">Grade distribution &amp; student-wise result</h2>
+            <button type="button" disabled={sheetLoading} className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded font-semibold"
+              onClick={loadSheet}>{sheetLoading ? 'Computing…' : 'Refresh'}</button>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">Total (100) = T1 + T2 + T3 + TA from the shared roster. Grade bands are stored per course.</p>
+          {sheetLoading && !sheet && <p className="text-sm text-slate-500">Computing results…</p>}
+          <div className="grid lg:grid-cols-2 gap-6 mb-6">
+            <table className="w-full text-sm border-collapse">
+              <thead><tr className="bg-slate-50"><th className="border p-1">Grade</th><th className="border p-1">No. of Students</th><th className="border p-1">% of Students</th></tr></thead>
+              <tbody>
+                {(sheet?.grade_distribution || []).map((g) => (
+                  <tr key={g.grade}><td className="border p-1">{g.grade}</td><td className="border p-1 text-center">{g.count}</td><td className="border p-1 text-center">{g.percent}%</td></tr>
                 ))}
               </tbody>
             </table>
+            <BarChart
+              title="Grade distribution (no. of students)"
+              items={(sheet?.grade_distribution || []).map((g) => ({ label: g.grade, value: g.count, display: `${g.count} (${g.percent}%)` }))}
+            />
           </div>
-        )}
-      </section>
+          <h3 className="font-semibold mb-2">Student-wise Result</h3>
+          <table className="w-full text-xs border-collapse min-w-[720px]">
+            <thead>
+              <tr className="bg-slate-50">
+                {['S.No', 'Enrol No', 'Name', 'T1', 'T2', 'T3', 'TA', 'Total (100)', 'Grade'].map((h) => (
+                  <th key={h} className="border p-1">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(sheet?.results || []).map((r) => (
+                <tr key={r.enrol}>
+                  <td className="border p-1 text-center">{r.sno}</td>
+                  <td className="border p-1">{r.enrol}</td>
+                  <td className="border p-1">{r.name}</td>
+                  <td className="border p-1 text-center">{fmt(r.t1, 1)}</td>
+                  <td className="border p-1 text-center">{fmt(r.t2, 1)}</td>
+                  <td className="border p-1 text-center">{fmt(r.t3, 1)}</td>
+                  <td className="border p-1 text-center">{fmt(r.ta, 1)}</td>
+                  <td className="border p-1 text-center font-bold">{fmt(r.total, 1)}</td>
+                  <td className="border p-1 text-center font-bold">{r.grade}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+          <SheetPreview
+            kind="result"
+            course={course}
+            sheet={sheet}
+            previewing={previewing}
+            onToggle={() => setPreviewing((v) => !v)}
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -604,9 +677,5 @@ function formatError(err, fallback) {
   if (!data) return fallback;
   if (typeof data === 'string') return data;
   if (data.detail) return data.detail;
-  try {
-    return JSON.stringify(data);
-  } catch {
-    return fallback;
-  }
+  try { return JSON.stringify(data); } catch { return fallback; }
 }

@@ -1,6 +1,6 @@
 # OBE Management System
 
-Standalone web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, Assessment Tools, and related faculty workflows.
+Standalone web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, Assessment Tools, Students & Marks, and CO/PO/PSO attainment.
 
 This system is **independent**. It has its own UI, APIs, authentication, and database. It does not connect to or share data with any other OBE project.
 
@@ -54,10 +54,9 @@ Recalculate from student marks:
 - PO/PSO attainment from CO attainment × mapping strength  
 
 ### Also included
-- Students & marks entry per assessment type  
-- **Assessment Tools** document (question ↔ CO mapping, stored per offering)  
-- Projects  
-- Dashboard  
+- Students & marks entry per assessment type (including TA / Project)
+- **Assessment Tools** document (question ↔ CO mapping, stored per offering)
+- Dashboard
 - Admin user management  
 
 ## Folder structure
@@ -74,8 +73,7 @@ obe-part2/
 │   ├── assessments/              # Assessment, Student, StudentMark
 │   ├── attainments/              # CO/PO calculation + HistoricalCoAttainment
 │   ├── opening_reports/          # OpeningReport (OneToOne Course)
-│   ├── assessment_tools/         # Assessment Tools document (OneToOne Course)
-│   └── projects/
+│   └── assessment_tools/         # Assessment Tools document (OneToOne Course)
 ├── frontend/
 │   └── src/
 │       ├── api/client.js         # axios + JWT refresh
@@ -98,7 +96,6 @@ obe-part2/
 | Assessments, students, marks | `/assessments/` |
 | CO/PO attainment + calculate | `/attainments/` |
 | Historical CO attainment | `/attainments/historical/?course=&academic_year=` |
-| Projects | `/projects/` |
 
 ## First-time setup
 

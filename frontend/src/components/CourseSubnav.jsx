@@ -39,12 +39,6 @@ export default function CourseSubnav({ courseId }) {
       >
         Assessment Tools
       </NavLink>
-      <NavLink
-        to={`/courses/${courseId}/projects`}
-        className={({ isActive }) => `${link} ${isActive ? active : idle}`}
-      >
-        Projects
-      </NavLink>
     </div>
   );
 }
