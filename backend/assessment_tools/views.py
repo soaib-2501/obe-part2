@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 
 from courses.models import Course
 from courses.serializers import CourseSerializer
-from .models import AssessmentToolsDocument
+from .models import AssessmentToolsDocument, merge_synced_tools, tools_from_assessments
 from .serializers import AssessmentToolsDocumentSerializer
 
 
@@ -23,12 +23,21 @@ class AssessmentToolsDetailView(APIView):
         if not course:
             return Response({'error': 'Course not found.'}, status=404)
         doc, created = AssessmentToolsDocument.objects.get_or_create(course=course)
-        if created or not doc.tools:
+        generated = tools_from_assessments(course)
+        if generated:
+            synced = merge_synced_tools(generated, doc.tools)
+            if synced != doc.tools:
+                doc.tools = synced
+                if created:
+                    doc.apply_defaults()
+                doc.save()
+        elif created or not doc.tools:
             doc.apply_defaults()
             doc.save()
         return Response({
             'document': AssessmentToolsDocumentSerializer(doc).data,
             'course': CourseSerializer(course).data,
+            'synced_from_marks': bool(generated),
         })
 
     def patch(self, request, course_id):

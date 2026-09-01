@@ -10,7 +10,7 @@ class AttainmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'course', 'course_outcome', 'co_code',
             'direct_attainment', 'indirect_attainment', 'final_attainment',
-            'attainment_level', 'calculated_at',
+            'attainment_level', 'breakdown', 'calculated_at',
         ]
         read_only_fields = ['direct_attainment', 'indirect_attainment', 'final_attainment', 'attainment_level']
 

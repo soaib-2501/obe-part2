@@ -242,12 +242,95 @@
   padding: 4px 6px;
 }
 
+.sheet-print-page {
+  background: #fff;
+  padding: 12px;
+  font-size: 11px;
+  color: #111;
+}
+
+.sheet-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 12px;
+  font-size: 10px;
+}
+
+.sheet-print-table th,
+.sheet-print-table td {
+  border: 1px solid #1e293b;
+  padding: 3px 5px;
+  text-align: center;
+}
+
+.sheet-print-table td.left {
+  text-align: left;
+}
+
+.sheet-print-table.summary td:first-child {
+  text-align: left;
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+.sheet-lvl {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.sheet-lvl.co-l0 { background: #fee2e2; }
+.sheet-lvl.co-l1 { background: #fef3c7; }
+.sheet-lvl.co-l2 { background: #dbeafe; }
+.sheet-lvl.co-l3 { background: #d1fae5; }
+
+.sheet-print-offscreen {
+  position: absolute;
+  left: -14000px;
+  top: 0;
+  width: 210mm;
+  pointer-events: none;
+}
+
 @media print {
   .no-print,
   .a4-page-probe,
   .a4-measure-root,
   nav {
     display: none !important;
+  }
+
+  body.print-sheet-only .a4-stage,
+  body.print-sheet-only .no-print,
+  body.print-sheet-only nav,
+  body.print-sheet-only .CourseSubnav {
+    display: none !important;
+  }
+
+  body.print-sheet-only * {
+    visibility: hidden;
+  }
+
+  body.print-sheet-only .sheet-print-target,
+  body.print-sheet-only .sheet-print-target * {
+    visibility: visible;
+  }
+
+  body.print-sheet-only .sheet-print-offscreen {
+    position: static !important;
+    left: auto !important;
+    width: 100% !important;
+    pointer-events: auto;
+  }
+
+  body.print-sheet-only .sheet-print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
   }
 
   html, body, #root {

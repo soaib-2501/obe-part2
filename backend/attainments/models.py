@@ -19,7 +19,7 @@ class Attainment(models.Model):
     indirect_attainment = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     final_attainment = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     attainment_level = models.PositiveSmallIntegerField(null=True, blank=True)  # 0-3 scale
-
+    breakdown = models.JSONField(default=dict, blank=True)
     calculated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

@@ -25,12 +25,16 @@ class AssessmentToolsDocumentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Each tool needs a questions list.')
             cleaned.append({
                 'name': str(tool.get('name') or '').strip() or 'T-1',
+                'term': str(tool.get('term') or '').strip(),
+                'assessment_type': str(tool.get('assessment_type') or '').strip(),
                 'questions': [
                     {
                         'qno': str(q.get('qno') or '').strip() or f'Q{i + 1}',
                         'co_code': str(q.get('co_code') or '').strip(),
                         'ques_level': str(q.get('ques_level') or '').strip(),
                         'remarks': str(q.get('remarks') or ''),
+                        'max_marks': str(q.get('max_marks') or '').strip(),
+                        'source_key': str(q.get('source_key') or '').strip(),
                     }
                     for i, q in enumerate(questions)
                     if isinstance(q, dict)

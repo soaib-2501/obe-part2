@@ -1,6 +1,6 @@
 # OBE Management System — Part 2
 
-Web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, assessments, CO/PO/PSO attainment, and projects.
+Web platform for **Outcome-Based Education** course offerings: Course Description, Opening Report, assessments, CO/PO/PSO attainment.
 
 ```
 React (Vite + Tailwind)  →  Django REST + JWT  →  PostgreSQL (Neon)
@@ -52,10 +52,9 @@ Recalculate from student marks:
 - PO/PSO attainment from CO attainment × mapping strength  
 
 ### Also included
-- Students & marks entry per assessment type  
-- **Assessment Tools** document (question ↔ CO mapping, stored per offering)  
-- Projects  
-- Dashboard  
+- Students & marks entry per assessment type (including TA / Project)
+- **Assessment Tools** document (question ↔ CO mapping, stored per offering)
+- Dashboard
 - Admin user management  
 
 ## Folder structure
@@ -73,7 +72,6 @@ obe-part2/
 │   ├── attainments/              # CO/PO calculation + HistoricalCoAttainment
 │   ├── opening_reports/          # OpeningReport (OneToOne Course)
 │   ├── assessment_tools/         # Assessment Tools document (OneToOne Course)
-│   └── projects/
 ├── frontend/
 │   └── src/
 │       ├── api/client.js         # axios + JWT refresh
@@ -96,7 +94,6 @@ obe-part2/
 | Assessments, students, marks | `/assessments/` |
 | CO/PO attainment + calculate | `/attainments/` |
 | Historical CO attainment | `/attainments/historical/?course=&academic_year=` |
-| Projects | `/projects/` |
 
 ## First-time setup
 

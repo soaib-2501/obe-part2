@@ -10,9 +10,8 @@ import CourseDetail from './pages/CourseDetail';
 import CourseDescription from './pages/CourseDescription';
 import CourseOpeningReport from './pages/CourseOpeningReport';
 import CourseAssessments from './pages/CourseAssessments';
-import Projects from './pages/Projects';
-import Users from './pages/Users';
 import CourseAssessmentTools from './pages/CourseAssessmentTools';
+import Users from './pages/Users';
 
 export default function App() {
   return (
@@ -29,8 +28,6 @@ export default function App() {
         <Route path="/courses/:id/opening-report" element={<ProtectedRoute><CourseOpeningReport /></ProtectedRoute>} />
         <Route path="/courses/:id/assessments" element={<ProtectedRoute><CourseAssessments /></ProtectedRoute>} />
         <Route path="/courses/:id/assessment-tools" element={<ProtectedRoute><CourseAssessmentTools /></ProtectedRoute>} />
-        <Route path="/courses/:id/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-        <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       </Routes>
     </div>
   );

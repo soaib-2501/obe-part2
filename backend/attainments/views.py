@@ -54,6 +54,20 @@ class AttainmentViewSet(viewsets.ReadOnlyModelViewSet):
         })
 
     @action(detail=False, methods=['get'])
+    def sheet(self, request):
+        from courses.models import Course
+        from .services import build_sheet
+        course_id = request.query_params.get('course')
+        if not course_id:
+            return Response({'error': 'course is required'}, status=400)
+        course = Course.objects.filter(pk=course_id).first()
+        if not course:
+            return Response({'error': 'Course not found.'}, status=404)
+        if request.user.is_faculty_role and course.faculty_id != request.user.id:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return Response(build_sheet(course))
+
+    @action(detail=False, methods=['get'])
     def historical(self, request):
         from courses.models import Course
         course_id = request.query_params.get('course')

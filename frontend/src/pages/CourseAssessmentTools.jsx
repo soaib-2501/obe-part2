@@ -49,10 +49,13 @@ export default function CourseAssessmentTools() {
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [syncedFromMarks, setSyncedFromMarks] = useState(false);
+
   async function load() {
     const res = await api.get(`/assessment-tools/${id}/`);
     setCourse(res.data.course);
     setDoc(res.data.document);
+    setSyncedFromMarks(!!res.data.synced_from_marks);
   }
 
   useEffect(() => {
@@ -175,7 +178,7 @@ export default function CourseAssessmentTools() {
 
         <div className="flex flex-wrap gap-2 justify-end mb-4">
           <button type="button" onClick={() => window.print()} className="bg-slate-200 px-4 py-2 rounded text-sm font-semibold">
-            Print / Save as PDF
+            Print
           </button>
           <button type="button" disabled={saving} onClick={save} className="bg-slate-900 text-white px-4 py-2 rounded text-sm font-semibold disabled:opacity-50">
             {saving ? 'Saving…' : 'Save Assessment Tools'}
@@ -244,13 +247,21 @@ export default function CourseAssessmentTools() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-semibold text-slate-900">Assessment tools</h2>
-              <button type="button" className="text-xs font-semibold bg-slate-200 px-3 py-1.5 rounded" onClick={addTool}>
-                + Add tool (T1 / T2 / End sem)
-              </button>
+              <div className="flex gap-2">
+                <button type="button" className="text-xs font-semibold bg-blue-100 text-blue-900 px-3 py-1.5 rounded" onClick={() => load().then(() => setStatus('Synced from Students & Marks.'))}>
+                  Sync from Students & Marks
+                </button>
+                {!syncedFromMarks && (
+                  <button type="button" className="text-xs font-semibold bg-slate-200 px-3 py-1.5 rounded" onClick={addTool}>
+                    + Add tool
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-xs text-slate-500 mb-3">
-              Add T-1, T-2 / mid sem, T-3 / end sem, then as many questions as needed.
-              Choosing a CO fills the question cognitive level from that CO; you can still change it and add remarks.
+              {syncedFromMarks
+                ? 'Questions, exam term (T1 / T2 / T3 / TA / Feedback) and CO mapping are pulled automatically from Students & Marks. Remarks stay editable. Click Sync after you change questions on the marks sheets.'
+                : 'Add T-1, T-2 / mid sem, T-3 / end sem, then as many questions as needed. Choosing a CO fills the question cognitive level from that CO.'}
             </p>
             {outcomes.length === 0 && (
               <p className="text-sm text-amber-700 bg-amber-50 rounded p-3 mb-3">
@@ -263,17 +274,24 @@ export default function CourseAssessmentTools() {
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <input className="border rounded px-3 py-1.5 text-sm font-semibold w-40"
                       value={tool.name || ''}
+                      readOnly={syncedFromMarks && !!tool.assessment_type}
                       onChange={(e) => updateToolName(tIdx, e.target.value)}
                       placeholder="T-1" />
-                    <button type="button" className="text-xs font-semibold bg-slate-200 px-3 py-1.5 rounded"
-                      onClick={() => addQuestion(tIdx)}>+ Question</button>
-                    <button type="button" className="text-xs text-red-600 ml-auto" onClick={() => removeTool(tIdx)}>Remove tool</button>
+                    {tool.term ? <span className="text-xs text-slate-500">{tool.term}</span> : null}
+                    {!(syncedFromMarks && tool.assessment_type) && (
+                      <button type="button" className="text-xs font-semibold bg-slate-200 px-3 py-1.5 rounded"
+                        onClick={() => addQuestion(tIdx)}>+ Question</button>
+                    )}
+                    {!(syncedFromMarks && tool.assessment_type) && (
+                      <button type="button" className="text-xs text-red-600 ml-auto" onClick={() => removeTool(tIdx)}>Remove tool</button>
+                    )}
                   </div>
                   <div className="overflow-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-slate-500 text-xs">
                           <th className="pb-1 w-14">Q. No.</th>
+                          <th className="pb-1 w-24">Max</th>
                           <th className="pb-1">CO cognitive level</th>
                           <th className="pb-1">Cognitive level of the question</th>
                           <th className="pb-1">Remarks</th>
@@ -284,17 +302,22 @@ export default function CourseAssessmentTools() {
                         {(tool.questions || []).map((q, qIdx) => (
                           <tr key={qIdx} className="align-top">
                             <td className="py-1 pr-2 font-semibold">{q.qno}</td>
+                            <td className="py-1 pr-2 text-slate-600">{q.max_marks || '—'}</td>
                             <td className="py-1 pr-2">
-                              <select className="w-full border rounded px-2 py-1.5"
-                                value={q.co_code || ''}
-                                onChange={(e) => updateQuestion(tIdx, qIdx, 'co_code', e.target.value)}>
-                                <option value="">Select CO</option>
-                                {outcomes.map((co) => (
-                                  <option key={co.id || co.co_code} value={co.co_code}>
-                                    {co.co_code} — {CO_LEVEL_LABELS[co.cognitive_level] || co.cognitive_level}
-                                  </option>
-                                ))}
-                              </select>
+                              {syncedFromMarks && tool.assessment_type ? (
+                                <span className="text-sm">{coLevelText(q.co_code)}</span>
+                              ) : (
+                                <select className="w-full border rounded px-2 py-1.5"
+                                  value={q.co_code || ''}
+                                  onChange={(e) => updateQuestion(tIdx, qIdx, 'co_code', e.target.value)}>
+                                  <option value="">Select CO</option>
+                                  {outcomes.map((co) => (
+                                    <option key={co.id || co.co_code} value={co.co_code}>
+                                      {co.co_code} — {CO_LEVEL_LABELS[co.cognitive_level] || co.cognitive_level}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
                             </td>
                             <td className="py-1 pr-2">
                               <select className="w-full border rounded px-2 py-1.5"
@@ -310,7 +333,9 @@ export default function CourseAssessmentTools() {
                                 placeholder="Optional" />
                             </td>
                             <td className="py-1">
-                              <button type="button" className="text-red-600" onClick={() => removeQuestion(tIdx, qIdx)}>✕</button>
+                              {!(syncedFromMarks && tool.assessment_type) && (
+                                <button type="button" className="text-red-600" onClick={() => removeQuestion(tIdx, qIdx)}>✕</button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -356,8 +381,10 @@ export default function CourseAssessmentTools() {
           <table className="w-full border-collapse mb-4">
             <thead>
               <tr>
-                <th className={`${th} w-[14%]`}>Assessment Tool</th>
-                <th className={`${th} w-[12%]`}>Question No.</th>
+                <th className={`${th} w-[12%]`}>Assessment Tool</th>
+                <th className={`${th} w-[16%]`}>Term</th>
+                <th className={`${th} w-[10%]`}>Question No.</th>
+                <th className={`${th} w-[8%]`}>Max</th>
                 <th className={th}>CO Cognitive Level</th>
                 <th className={th}>Cognitive Level of the Question</th>
                 <th className={th}>Remarks</th>
@@ -372,7 +399,13 @@ export default function CourseAssessmentTools() {
                         {tool.name}
                       </td>
                     ) : null}
+                    {qIdx === 0 ? (
+                      <td className={`${td} text-center align-middle`} rowSpan={(tool.questions || []).length}>
+                        {tool.term || tool.name}
+                      </td>
+                    ) : null}
                     <td className={`${td} text-center font-semibold`}>{q.qno}</td>
+                    <td className={`${td} text-center`}>{q.max_marks || '—'}</td>
                     <td className={`${td} text-center`}>{coLevelText(q.co_code)}</td>
                     <td className={`${td} text-center font-semibold`}>{q.ques_level || '—'}</td>
                     <td className={td}>{q.remarks || ''}</td>
