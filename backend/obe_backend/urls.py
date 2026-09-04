@@ -15,4 +15,5 @@ urlpatterns = [
     path('api/attainments/', include('attainments.urls')),
     path('api/opening-reports/', include('opening_reports.urls')),
     path('api/assessment-tools/', include('assessment_tools.urls')),
+    path('api/closing-reports/', include('closing_reports.urls')),
 ]

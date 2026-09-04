@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'attainments',
     'opening_reports',
     'assessment_tools',
+    'closing_reports',
 ]
 
 MIDDLEWARE = [
